@@ -65,6 +65,22 @@ These are improvements to the diagram editor itself, making it a solid standalon
 - Distribute evenly
 - Auto-layout for common diagram shapes (triangle, square, chain/exact sequence)
 
+**Common Constructions Library** *(added v0.2)*
+- A toolbar button ("⊕ Insert") opens a dropdown listing common categorical structures
+- Clicking a template inserts labeled objects and correctly-typed morphisms onto the canvas, centered in the current viewport
+- All labels use proper LaTeX and are editable after insertion like any other object
+- Templates included:
+  - **Product** — objects A, B with product A×B and canonical projections π₁, π₂
+  - **Coproduct** — objects A, B with coproduct A⊔B and injections i₁, i₂
+  - **Pullback** — the standard pullback square P → A, P → B, A → C, B → C
+  - **Pushout** — the standard pushout square A → B, A → C, B → P, C → P
+  - **Quotient map** — object A with epimorphism q: A → A/~
+  - **Kernel / Cokernel** — chain ker(f) →↪ A → B →↠ coker(f) with mono/epi types
+  - **Adjunction** — categories C, D with curved functors F and G
+  - **Exact sequence** — chain A →↪ B →↠ C with mono on first, epi on last
+  - **Identity morphism** — self-loop on object A labeled id_A
+  - **Commutative square** — four objects A, B, C, D with four morphisms pre-marked as commutative
+
 **Exact sequence mode**
 - Specialized layout: objects arranged in a horizontal line
 - Arrows auto-typed as appropriate (mono on first, epi on last, etc.)
