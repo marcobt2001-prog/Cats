@@ -3,7 +3,7 @@ import katex from 'katex';
 import { computeGeom, offsetBezier } from './geometry.js';
 import { TYPE_META } from './defs.jsx';
 
-function LatexLabel({ raw, x, y, selected, commutative }) {
+function LatexLabel({ raw, x, y, selected, commutative, locked }) {
   const html = useMemo(() => {
     if (!raw) return '';
     try {
@@ -13,7 +13,9 @@ function LatexLabel({ raw, x, y, selected, commutative }) {
     }
   }, [raw]);
 
-  const fill = commutative ? '#6ee7b7' : selected ? '#ffb74d' : '#c8d3ea';
+  const fill = locked
+    ? '#4a6080'
+    : commutative ? '#6ee7b7' : selected ? '#ffb74d' : '#c8d3ea';
 
   if (!raw) return null;
   return (
@@ -24,7 +26,7 @@ function LatexLabel({ raw, x, y, selected, commutative }) {
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           width: '100%', height: '100%', color: fill,
           fontFamily: "'Crimson Text', serif", fontSize: 16,
-          textShadow: commutative ? '0 0 8px rgba(110,231,183,0.6)' : 'none',
+          textShadow: commutative && !locked ? '0 0 8px rgba(110,231,183,0.6)' : 'none',
         }}
         dangerouslySetInnerHTML={{ __html: html }}
       />
@@ -32,22 +34,28 @@ function LatexLabel({ raw, x, y, selected, commutative }) {
   );
 }
 
-export default function Edge({ edge, src, tgt, selected, commutative, onClick, onCurveAdjust }) {
+export default function Edge({ edge, src, tgt, selected, commutative, onClick, onCurveAdjust, locked }) {
   const geom = computeGeom(src, tgt, edge.curve ?? 0);
   if (!geom) return null;
 
   const meta = TYPE_META[edge.type] || TYPE_META.morphism;
-  const col = commutative ? '#6ee7b7' : selected ? '#ffb74d' : '#4db8ff';
-  const tipSuffix = commutative ? '-comm' : selected ? '-sel' : '';
+
+  const col = locked
+    ? '#1e3a5a'
+    : commutative ? '#6ee7b7' : selected ? '#ffb74d' : '#4db8ff';
+
+  const tipSuffix = locked
+    ? '-locked'
+    : commutative ? '-comm' : selected ? '-sel' : '';
   const tipId = `tip${tipSuffix}`;
   const natId = `tip-nat${tipSuffix}`;
   const hookId = `hook${tipSuffix}`;
   const glowFilter = commutative ? 'url(#glow-comm)' : selected ? 'url(#glow)' : undefined;
 
   const strokeProps = {
-    fill: 'none', stroke: col, strokeWidth: 1.8,
+    fill: 'none', stroke: col, strokeWidth: locked ? 1.2 : 1.8,
     strokeDasharray: meta.dash || undefined,
-    filter: (selected || commutative) ? glowFilter : undefined,
+    filter: !locked && (selected || commutative) ? glowFilter : undefined,
   };
 
   const paths = [];
@@ -82,18 +90,20 @@ export default function Edge({ edge, src, tgt, selected, commutative, onClick, o
         <line key="head2"
           x1={ix} y1={iy}
           x2={ix + Math.cos(angle)*10} y2={iy + Math.sin(angle)*10}
-          stroke={col} strokeWidth={1.8} markerEnd={`url(#${tipId})`} />
+          stroke={col} strokeWidth={locked ? 1.2 : 1.8} markerEnd={`url(#${tipId})`} />
       );
     }
   }
 
   return (
-    <g onClick={onClick} style={{ cursor: 'pointer' }}>
-      <path d={geom.d} fill="none" stroke="transparent" strokeWidth={24} />
+    <g onClick={locked ? undefined : onClick}
+      style={{ cursor: locked ? 'default' : 'pointer' }}
+      opacity={locked ? 0.7 : 1}>
+      {!locked && <path d={geom.d} fill="none" stroke="transparent" strokeWidth={24} />}
       {paths}
       <LatexLabel raw={edge.label} x={geom.lx} y={geom.ly}
-        selected={selected} commutative={commutative} />
-      {selected && !geom.isLoop && (
+        selected={selected} commutative={commutative} locked={locked} />
+      {!locked && selected && !geom.isLoop && (
         <circle cx={geom.cpx} cy={geom.cpy} r={6} fill="#ffb74d" opacity={0.55}
           style={{ cursor: 'ns-resize' }}
           onMouseDown={e => { e.stopPropagation(); onCurveAdjust(e); }} />

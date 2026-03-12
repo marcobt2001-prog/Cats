@@ -10,6 +10,7 @@ import AlignToolbar from './AlignToolbar.jsx';
 import { CONSTRUCTIONS } from './constructions.js';
 import { exportTikzCD, exportSVG, saveDiagramFile, loadDiagramFile } from './export.js';
 import { st } from './styles.js';
+import GameMode from './game/GameMode.jsx';
 
 const DEFAULT_NODES = [
   { id: 'A', label: 'A', x: 200, y: 240 },
@@ -48,24 +49,7 @@ export default function App() {
           }}>{m}</button>
         ))}
       </div>
-      {appMode === 'editor' ? <Editor /> : <GamePlaceholder />}
-    </div>
-  );
-}
-
-function GamePlaceholder() {
-  return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      flexDirection: 'column', gap: 16 }}>
-      <div style={{ fontSize: 52, opacity: 0.1 }}>⬡</div>
-      <div style={{ color: '#2d4a7a', fontSize: 12, letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-        Game Mode
-      </div>
-      <div style={{ color: '#1e3256', fontSize: 11, maxWidth: 360, textAlign: 'center', lineHeight: 1.9 }}>
-        Diagram completion puzzles, diagram chasing, universal property challenges,
-        and named theorem levels (Five Lemma, Snake Lemma, Yoneda Lemma…)
-        <br /><br />Coming soon.
-      </div>
+      {appMode === 'editor' ? <Editor /> : <GameMode />}
     </div>
   );
 }
@@ -193,6 +177,10 @@ function Editor() {
   const [clipboard, setClipboard] = useState(null);
   const [toast, setToast]       = useState('');
   const [showConstructions, setShowConstructions] = useState(false);
+  const [panelState, setPanelState] = useState({ left: 'open', right: 'open' });
+
+  const toggleLeft = () => setPanelState(p => ({ ...p, left: p.left === 'open' ? 'collapsed' : 'open' }));
+  const toggleRight = () => setPanelState(p => ({ ...p, right: p.right === 'open' ? 'collapsed' : 'open' }));
 
   const svgRef = useRef();
 
@@ -523,7 +511,9 @@ function Editor() {
         onSelect={id => { setSel({ type: 'node', id }); setMultiSel(new Set()); }}
         onDelete={deleteNode}
         onLabelChange={(id, v) => updateNode(id, { label: v })}
-        onAdd={() => addNode()} />
+        onAdd={() => addNode()}
+        collapsed={panelState.left === 'collapsed'}
+        onToggle={toggleLeft} />
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 10px',
@@ -638,7 +628,9 @@ function Editor() {
 
       <MorphismPanel edges={edges} nodes={nodes} sel={activeSel}
         onSelect={id => { setSel({ type: 'edge', id }); setMultiSel(new Set()); }}
-        onDelete={deleteEdge} onUpdate={updateEdge} />
+        onDelete={deleteEdge} onUpdate={updateEdge}
+        collapsed={panelState.right === 'collapsed'}
+        onToggle={toggleRight} />
     </div>
   );
 }

@@ -4,6 +4,61 @@ All notable changes to this project will be documented in this file.
 
 <!-- New entries go here, newest first -->
 
+## 2026-03-12 — v0.4: Level Loader, Game Canvas, Locked Elements
+
+### Level System
+- Created `src/game/levels/index.js` — exports `LEVELS` (keyed by id) and `WORLDS` array
+- Created `src/game/levels/world1-sets.js` — level I-2 "Composition" with given nodes A, B, C and morphisms f, g
+- Level definitions include givens, proof log data, goals, hints, and aluffiRef
+
+### Level Loader
+- Created `src/game/LevelLoader.jsx` — `useLevelState(levelId)` hook
+- Merges locked given elements with player-drawn elements
+- Given nodes/edges get `locked: true` flag, player-drawn ones are normal
+
+### Locked Elements (Node.jsx, Edge.jsx)
+- Nodes and edges accept a `locked` prop
+- Locked nodes: muted stroke (#2d4a7a), muted fill, no drag/hover, 70% opacity
+- Locked edges: muted color (#1e3a5a), no click/select, 70% opacity
+- Added locked marker defs (tip-locked, hook-locked, tip-nat-locked) to defs.jsx
+- Keyboard delete skips locked elements
+- Editor mode is unaffected — `locked` prop is simply not passed
+
+### Game Mode Canvas
+- GameMode.jsx now renders a full interactive SVG canvas (reuses Edge/Node components)
+- Level title bar shows world name, level title, and Aluffi reference
+- Stripped-down toolbar (Select/Add/Draw modes only)
+- "? Hint" button reveals the first hint below the canvas
+- Player can draw new objects and morphisms on top of the locked givens
+- Player can use locked nodes as edge endpoints but cannot move/delete them
+
+### ProofLog Component
+- ProofLog.jsx now accepts `given`, `inventory`, and `steps` props
+- Given section shows items with labels and descriptions
+- Steps show status icons: ○ pending (#3d5a8a), ✓ verified (#6ee7b7), ✗ rejected (#ef4444)
+- Inventory section shows cards or "No cards yet" placeholder
+- Files touched: `src/game/ProofLog.jsx`
+
+## 2026-03-12 — v0.3: Panel Restructuring, Game Mode Stub
+
+### Panel Restructuring
+- ObjectPanel (left) and MorphismPanel (right) are now independently collapsible
+- Collapsed state shows a 28px vertical tab strip with panel name and arrow indicator
+- Click the tab or the arrow in the header to toggle collapse/expand
+- CSS transition on width (200ms ease) for smooth animation
+- `panelState` tracked in Editor: `{ left: 'open' | 'collapsed', right: 'open' | 'collapsed' }`
+- Files touched: `src/ObjectPanel.jsx`, `src/MorphismPanel.jsx`, `src/App.jsx`
+
+### Game Mode Stub
+- Replaced placeholder with `GameMode` component rendering a two-panel layout
+- Left side: canvas area with level title bar ("World 1 · Level 1 — What is a function?")
+- Right side: `ProofLog` stub panel (320px) with three sections: Given, Inventory, Steps
+- Files touched: `src/game/GameMode.jsx` (new), `src/game/ProofLog.jsx` (new), `src/App.jsx`
+
+### Spec Update
+- Updated project spec with full game mode design (Aluffi Chapters I–II curriculum, construction cards, Lean integration, level definitions, validation engine)
+- Files touched: `catdiagram-project.md`
+
 ## 2026-03-12 — v0.2: Undo/Redo, Alignment Tools, Common Constructions Library
 
 ### Undo / Redo

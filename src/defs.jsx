@@ -50,9 +50,12 @@ export function Defs() {
       {mkArrowDouble('tip-nat',     '#4db8ff')}
       {mkArrowDouble('tip-nat-sel', '#ffb74d')}
       {mkArrowDouble('tip-nat-comm','#6ee7b7')}
-      {mkHook('hook',      '#4db8ff')}
-      {mkHook('hook-sel',  '#ffb74d')}
-      {mkHook('hook-comm', '#6ee7b7')}
+      {mkHook('hook',        '#4db8ff')}
+      {mkHook('hook-sel',    '#ffb74d')}
+      {mkHook('hook-comm',   '#6ee7b7')}
+      {mkArrow('tip-locked',       '#1e3a5a')}
+      {mkArrowDouble('tip-nat-locked', '#1e3a5a')}
+      {mkHook('hook-locked',       '#1e3a5a')}
       <filter id="glow">
         <feGaussianBlur stdDeviation="3" result="blur" />
         <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
