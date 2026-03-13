@@ -8,9 +8,9 @@ import CollapsiblePanel from '../panels/CollapsiblePanel.jsx';
 import ProofLog from './ProofLog.jsx';
 import { useLevelState } from './LevelLoader.jsx';
 import { validateGoals } from './ValidationEngine.js';
+import { markLevelComplete } from './completion.js';
 
-export default function GameMode() {
-  const levelId = 'I-2';
+export default function GameMode({ levelId, onBackToSelect }) {
   const lv = useLevelState(levelId);
 
   if (!lv) {
@@ -22,10 +22,10 @@ export default function GameMode() {
     );
   }
 
-  return <GameCanvas lv={lv} />;
+  return <GameCanvas lv={lv} onBackToSelect={onBackToSelect} />;
 }
 
-function GameCanvas({ lv }) {
+function GameCanvas({ lv, onBackToSelect }) {
   const { level, nodes, edges, setNodes, setEdges, givenNodeIds, givenEdgeIds, reset } = lv;
 
   const [mode, setMode]       = useState('select');
@@ -71,13 +71,14 @@ function GameCanvas({ lv }) {
     [level.goals, nodes, edges, commEdgeIds],
   );
 
-  // Show completion overlay once
+  // Show completion overlay once and persist
   useEffect(() => {
     if (levelComplete && !completedOnceRef.current) {
       completedOnceRef.current = true;
+      markLevelComplete(level.id);
       setShowComplete(true);
     }
-  }, [levelComplete]);
+  }, [levelComplete, level.id]);
 
   // Toggle commutative on an edge
   const toggleCommutative = (edgeId) => {
@@ -280,6 +281,18 @@ function GameCanvas({ lv }) {
           borderBottom: '1px solid #1a2540',
           flexShrink: 0,
         }}>
+          <button
+            onClick={onBackToSelect}
+            style={{
+              ...st.btn,
+              padding: '3px 8px',
+              fontSize: 9,
+              color: '#3d5a8a',
+              marginRight: 4,
+            }}
+          >
+            ← Levels
+          </button>
           <span style={{
             color: '#a78bfa', fontSize: 10,
             fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em',
@@ -409,7 +422,7 @@ function GameCanvas({ lv }) {
         )}
 
         {/* Completion overlay */}
-        {showComplete && <CompletionOverlay level={level} onClose={() => setShowComplete(false)} />}
+        {showComplete && <CompletionOverlay level={level} onClose={() => setShowComplete(false)} onBackToSelect={onBackToSelect} />}
       </div>
 
       <CollapsiblePanel side="right" label="Proof Log" defaultOpen={false}>
@@ -423,7 +436,7 @@ function GameCanvas({ lv }) {
   );
 }
 
-function CompletionOverlay({ level, onClose }) {
+function CompletionOverlay({ level, onClose, onBackToSelect }) {
   const leanStub = level.leanStub || '';
 
   return (
@@ -483,15 +496,25 @@ function CompletionOverlay({ level, onClose }) {
           </div>
         )}
 
-        <button onClick={onClose} style={{
-          ...st.btn,
-          color: '#6ee7b7',
-          borderColor: '#1a5a3a',
-          padding: '8px 22px',
-          fontSize: 12,
-        }}>
-          Continue →
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onBackToSelect} style={{
+            ...st.btn,
+            color: '#6ee7b7',
+            borderColor: '#1a5a3a',
+            padding: '8px 22px',
+            fontSize: 12,
+          }}>
+            Continue →
+          </button>
+          <button onClick={onClose} style={{
+            ...st.btn,
+            color: '#3d5a8a',
+            padding: '8px 16px',
+            fontSize: 11,
+          }}>
+            Stay
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -12,6 +12,7 @@ import { exportTikzCD, exportSVG, saveDiagramFile, loadDiagramFile } from './exp
 import { st } from './styles.js';
 import CollapsiblePanel from './panels/CollapsiblePanel.jsx';
 import GameMode from './game/GameMode.jsx';
+import WorldSelect from './game/WorldSelect.jsx';
 
 const DEFAULT_NODES = [
   { id: 'A', label: 'A', x: 200, y: 240 },
@@ -27,7 +28,21 @@ const DEFAULT_EDGES = [
 const HISTORY_CAP = 50;
 
 export default function App() {
-  const [appMode, setAppMode] = useState('editor');
+  const [appMode, setAppMode] = useState('editor'); // 'editor' | 'game-select' | 'game-play'
+  const [activeLevelId, setActiveLevelId] = useState(null);
+
+  const handleSelectLevel = (levelId) => {
+    setActiveLevelId(levelId);
+    setAppMode('game-play');
+  };
+
+  const handleBackToSelect = () => {
+    setActiveLevelId(null);
+    setAppMode('game-select');
+  };
+
+  const isGame = appMode === 'game-select' || appMode === 'game-play';
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh',
       background: '#0b0f1e', color: '#c8d3ea',
@@ -39,21 +54,36 @@ export default function App() {
           fontStyle: 'italic', marginRight: 20, letterSpacing: '0.05em' }}>
           Categorical
         </span>
-        {['editor', 'game'].map(m => (
-          <button key={m} onClick={() => setAppMode(m)} style={{
-            padding: '0 16px', height: 28, fontSize: 10, letterSpacing: '0.12em',
-            textTransform: 'uppercase', cursor: 'pointer',
-            border: `1px solid ${appMode === m ? '#4db8ff' : '#1e3a5a'}`,
-            borderRadius: 4,
-            background: appMode === m ? '#1e3a5a' : 'transparent',
-            color: appMode === m ? '#6ee7b7' : '#4a6a8a',
-            fontFamily: "'JetBrains Mono', monospace",
-            transition: 'all 0.15s',
-            marginRight: m === 'editor' ? 4 : 0,
-          }}>{m}</button>
-        ))}
+        {[['editor', 'editor'], ['game', 'game-select']].map(([label, target]) => {
+          const active = label === 'editor' ? appMode === 'editor' : isGame;
+          return (
+            <button key={label} onClick={() => setAppMode(target)} style={{
+              padding: '0 16px', height: 28, fontSize: 10, letterSpacing: '0.12em',
+              textTransform: 'uppercase', cursor: 'pointer',
+              border: `1px solid ${active ? '#4db8ff' : '#1e3a5a'}`,
+              borderRadius: 4,
+              background: active ? '#1e3a5a' : 'transparent',
+              color: active ? '#6ee7b7' : '#4a6a8a',
+              fontFamily: "'JetBrains Mono', monospace",
+              transition: 'all 0.15s',
+              marginRight: label === 'editor' ? 4 : 0,
+            }}>{label}</button>
+          );
+        })}
       </div>
-      {appMode === 'editor' ? <Editor /> : <GameMode />}
+      {appMode === 'editor' && <Editor />}
+      {appMode === 'game-select' && (
+        <WorldSelect
+          onSelectLevel={handleSelectLevel}
+          onBackToEditor={() => setAppMode('editor')}
+        />
+      )}
+      {appMode === 'game-play' && activeLevelId && (
+        <GameMode
+          levelId={activeLevelId}
+          onBackToSelect={handleBackToSelect}
+        />
+      )}
     </div>
   );
 }

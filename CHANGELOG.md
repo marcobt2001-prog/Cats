@@ -4,6 +4,46 @@ All notable changes to this project will be documented in this file.
 
 <!-- New entries go here, newest first -->
 
+## 2026-03-13 — v0.5: World Select, More Levels, Completion Persistence
+
+### World / Level Select Screen
+- Created `src/game/WorldSelect.jsx` — the game's home screen showing all 8 worlds as expandable rows
+- Each world row shows name, Aluffi reference, and level completion count
+- Level tiles show id, title, Aluffi ref, and completion badge (○ pending / ✓ complete)
+- Worlds 2–8 are locked/grayed out; only World 1 is playable
+- "← Back to Editor" button returns to the diagram editor
+- Styled consistently with existing dark theme (#050812 bg, JetBrains Mono, blues/teals)
+
+### Three-Mode App Structure
+- App now supports three top-level modes: `editor` | `game-select` | `game-play`
+- Header mode switcher toggles between "editor" and "game" (game shows world select)
+- Selecting a level from WorldSelect launches GameMode with that level
+- "← Levels" button in GameMode title bar returns to world select
+- Files touched: `src/App.jsx`
+
+### More World 1 Levels
+- **I-1: "What is a Function?"** — given sets A, B; goal: draw a morphism f: A → B
+- **I-3: "Identity Morphism"** — given object A; goal: draw id_A as a self-loop
+- **I-4: "Commutative Square"** — given A, B, C, D with f, g, h, k; goal: mark the square commutative
+- Each level includes goals, proof log, hints, Lean 4 stub, and awards card
+- Files touched: `src/game/levels/world1-sets.js`
+
+### World Stubs
+- Added world entries 2–8 to `src/game/levels/index.js` (Categories, Morphisms & Functors, Universal Properties, Groups, Free Groups, Subgroups, Quotient Groups)
+- All stub worlds have empty level arrays and show "Coming soon" in WorldSelect
+
+### Completion Persistence
+- Created `src/game/completion.js` — `getCompletedLevels()` / `markLevelComplete(id)` using localStorage key `catgame_completed`
+- Completion overlay "Continue →" button now returns to WorldSelect (with a "Stay" option)
+- GameMode persists completion to localStorage when level goals are all verified
+- WorldSelect reads localStorage to show completion badges and counts
+- Files touched: `src/game/GameMode.jsx`, `src/game/completion.js`
+
+### GameMode Updates
+- GameMode now accepts `levelId` and `onBackToSelect` props (no longer hardcoded to I-2)
+- Added "← Levels" navigation button in level title bar
+- Files touched: `src/game/GameMode.jsx`
+
 ## 2026-03-12 — v0.4: Level Loader, Game Canvas, Locked Elements
 
 ### Level System
