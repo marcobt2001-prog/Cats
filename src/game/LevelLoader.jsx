@@ -38,12 +38,18 @@ export function useLevelState(levelId) {
     });
   };
 
+  const reset = () => {
+    setPlayerNodes([]);
+    setPlayerEdges([]);
+  };
+
   return {
     level,
     nodes,
     edges,
     setNodes,
     setEdges,
+    reset,
     givenNodeIds: new Set(givenNodes.map(n => n.id)),
     givenEdgeIds: new Set(givenEdges.map(e => e.id)),
   };

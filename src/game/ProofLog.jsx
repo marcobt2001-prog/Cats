@@ -33,12 +33,14 @@ export default function ProofLog({ given = [], inventory = [], steps = [] }) {
     pending: '#3d5a8a',
     verified: '#6ee7b7',
     rejected: '#ef4444',
+    blocked: '#1e3256',
   };
 
   const statusIcon = {
     pending: '○',
     verified: '✓',
     rejected: '✗',
+    blocked: '🔒',
   };
 
   return (

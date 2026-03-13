@@ -1,11 +1,12 @@
-import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { R, uid, snap, computeGeom } from '../geometry.js';
+import { useState, useRef, useMemo, useEffect } from 'react';
+import { R, uid, computeGeom } from '../geometry.js';
 import { Defs } from '../defs.jsx';
 import Edge from '../Edge.jsx';
 import Node from '../Node.jsx';
 import { st } from '../styles.js';
 import ProofLog from './ProofLog.jsx';
 import { useLevelState } from './LevelLoader.jsx';
+import { validateGoals } from './ValidationEngine.js';
 
 export default function GameMode() {
   const levelId = 'I-2';
@@ -24,7 +25,7 @@ export default function GameMode() {
 }
 
 function GameCanvas({ lv }) {
-  const { level, nodes, edges, setNodes, setEdges, givenNodeIds, givenEdgeIds } = lv;
+  const { level, nodes, edges, setNodes, setEdges, givenNodeIds, givenEdgeIds, reset } = lv;
 
   const [mode, setMode]       = useState('select');
   const [drawSrc, setDrawSrc] = useState(null);
@@ -36,8 +37,11 @@ function GameCanvas({ lv }) {
   const [multiSel, setMultiSel] = useState(new Set());
   const [showHint, setShowHint] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
+  const [showComplete, setShowComplete] = useState(false);
+  const [commEdgeIds, setCommEdgeIds] = useState(new Set());
 
   const svgRef = useRef();
+  const completedOnceRef = useRef(false);
 
   const pt = e => {
     const r = svgRef.current.getBoundingClientRect();
@@ -60,6 +64,30 @@ function GameCanvas({ lv }) {
     return s;
   }, [multiSel, sel]);
 
+  // Validation
+  const { updatedSteps, levelComplete } = useMemo(
+    () => validateGoals(level.goals, nodes, edges, commEdgeIds),
+    [level.goals, nodes, edges, commEdgeIds],
+  );
+
+  // Show completion overlay once
+  useEffect(() => {
+    if (levelComplete && !completedOnceRef.current) {
+      completedOnceRef.current = true;
+      setShowComplete(true);
+    }
+  }, [levelComplete]);
+
+  // Toggle commutative on an edge
+  const toggleCommutative = (edgeId) => {
+    setCommEdgeIds(prev => {
+      const next = new Set(prev);
+      if (next.has(edgeId)) next.delete(edgeId);
+      else next.add(edgeId);
+      return next;
+    });
+  };
+
   // Keyboard
   useEffect(() => {
     const h = e => {
@@ -69,13 +97,22 @@ function GameCanvas({ lv }) {
         if (e.key === '1') setMode('select');
         if (e.key === '2') { setMode('addNode'); setDrawSrc(null); }
         if (e.key === '3') { setMode('addEdge'); setDrawSrc(null); }
+        if (e.key === 'c' && !e.ctrlKey && !e.metaKey) {
+          // Toggle commutative on selected edge
+          if (sel?.type === 'edge') toggleCommutative(sel.id);
+        }
         if (e.key === 'Delete' || e.key === 'Backspace') {
-          // Only delete player-drawn elements, not locked ones
           const nIds = new Set([...selNodeIds].filter(id => !givenNodeIds.has(id)));
           const eIds = new Set([...selEdgeIds].filter(id => !givenEdgeIds.has(id)));
           if (nIds.size > 0 || eIds.size > 0) {
             setNodes(p => p.filter(n => !nIds.has(n.id)));
             setEdges(p => p.filter(ed => !eIds.has(ed.id) && !nIds.has(ed.src) && !nIds.has(ed.tgt)));
+            // Also remove comm marks for deleted edges
+            setCommEdgeIds(prev => {
+              const next = new Set(prev);
+              eIds.forEach(id => next.delete(id));
+              return next;
+            });
             setSel(null); setMultiSel(new Set());
           }
         }
@@ -83,9 +120,9 @@ function GameCanvas({ lv }) {
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [selNodeIds, selEdgeIds, givenNodeIds, givenEdgeIds]);
+  }, [selNodeIds, selEdgeIds, givenNodeIds, givenEdgeIds, sel]);
 
-  // Mutators (only affect player-drawn elements via setNodes/setEdges from LevelLoader)
+  // Mutators
   const addNode = (x, y) => {
     const label = String.fromCharCode(65 + (nodes.length % 26));
     const id = uid('obj');
@@ -167,7 +204,6 @@ function GameCanvas({ lv }) {
         setDragging({ id, lastX: p.x, lastY: p.y });
       }
     } else if (mode === 'addEdge') {
-      // Can use locked nodes as endpoints for new edges
       if (!drawSrc) { setDrawSrc(id); }
       else {
         const newEdge = { id: uid('e'), label: '', src: drawSrc, tgt: id, type: 'morphism', curve: 0, commutative: false };
@@ -190,6 +226,17 @@ function GameCanvas({ lv }) {
     if (givenEdgeIds.has(edgeId)) return;
     const edge = edgeById(edgeId);
     setCurveDrag({ edgeId, startY: pt(e).y, startCurve: edge.curve ?? 0 });
+  };
+
+  const handleReset = () => {
+    reset();
+    setCommEdgeIds(new Set());
+    setSel(null);
+    setMultiSel(new Set());
+    setDrawSrc(null);
+    setMode('select');
+    setShowComplete(false);
+    completedOnceRef.current = false;
   };
 
   const tempEdge = () => {
@@ -218,7 +265,8 @@ function GameCanvas({ lv }) {
   const status =
     mode === 'addNode' ? 'Click to place object  ·  Esc' :
     mode === 'addEdge' ? (drawSrc ? `Source: ${nodeById(drawSrc)?.label}  ·  click target` : 'Click source  ·  Esc') :
-    'Select · 1/2/3 modes · Del to remove player objects';
+    sel?.type === 'edge' ? 'Selected  ·  C to toggle commutative  ·  Del to remove' :
+    'Select · 1/2/3 modes · C commute · Del remove';
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -251,6 +299,18 @@ function GameCanvas({ lv }) {
             Aluffi {level.aluffiRef}
           </span>
           <button
+            onClick={handleReset}
+            style={{
+              ...st.btn,
+              padding: '4px 10px',
+              fontSize: 10,
+              color: '#ef4444',
+              borderColor: '#3b1a1a',
+            }}
+          >
+            ↺ Reset
+          </button>
+          <button
             onClick={() => setShowHint(h => !h)}
             style={{
               ...st.btn,
@@ -273,6 +333,21 @@ function GameCanvas({ lv }) {
           <ModeBtn m="select"  label="✦ Select" />
           <ModeBtn m="addNode" label="○ Add" />
           <ModeBtn m="addEdge" label="→ Draw" />
+          {sel?.type === 'edge' && !givenEdgeIds.has(sel.id) && (
+            <>
+              <div style={{ width: 1, height: 16, background: '#1a2540', margin: '0 2px' }} />
+              <button
+                onClick={() => toggleCommutative(sel.id)}
+                style={{
+                  ...(commEdgeIds.has(sel.id) ? st.btnActive : st.btn),
+                  color: commEdgeIds.has(sel.id) ? '#6ee7b7' : '#3d5a8a',
+                  borderColor: commEdgeIds.has(sel.id) ? '#6ee7b7' : undefined,
+                }}
+              >
+                ∘ Commute
+              </button>
+            </>
+          )}
           <div style={{ flex: 1 }} />
           <span style={{ color: '#1e3256', fontSize: 9, letterSpacing: '0.04em', lineHeight: 1.6 }}>
             {status}
@@ -292,9 +367,10 @@ function GameCanvas({ lv }) {
             const src = nodeById(e.src), tgt = nodeById(e.tgt);
             if (!src || !tgt) return null;
             const isLocked = !!e.locked;
+            const isComm = commEdgeIds.has(e.id) || !!e.commutative;
             return <Edge key={e.id} edge={e} src={src} tgt={tgt}
               selected={!isLocked && selEdgeIds.has(e.id)}
-              commutative={!!e.commutative}
+              commutative={isComm}
               locked={isLocked}
               onClick={ev => onEdgeClick(ev, e.id)}
               onCurveAdjust={ev => onCurveAdjust(ev, e.id)} />;
@@ -330,13 +406,141 @@ function GameCanvas({ lv }) {
             {level.hints[0]}
           </div>
         )}
+
+        {/* Completion overlay */}
+        {showComplete && <CompletionOverlay level={level} onClose={() => setShowComplete(false)} />}
       </div>
 
       <ProofLog
         given={level.proofLog.given}
         inventory={level.proofLog.inventory}
-        steps={level.proofLog.steps}
+        steps={updatedSteps}
       />
     </div>
   );
+}
+
+function CompletionOverlay({ level, onClose }) {
+  const leanStub = level.leanStub || '';
+
+  return (
+    <div style={{
+      position: 'absolute', inset: 0,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      background: 'rgba(5,8,18,0.85)',
+      zIndex: 100,
+    }}>
+      <div style={{
+        background: '#0c1220',
+        border: '1px solid #1a3a5a',
+        borderRadius: 10,
+        padding: '32px 36px',
+        maxWidth: 560,
+        width: '90%',
+        boxShadow: '0 12px 48px rgba(0,0,0,0.7)',
+      }}>
+        <div style={{
+          color: '#6ee7b7',
+          fontSize: 18,
+          fontFamily: "'JetBrains Mono', monospace",
+          fontWeight: 600,
+          marginBottom: 4,
+        }}>
+          {level.title}
+        </div>
+        <div style={{
+          color: '#6ee7b7',
+          fontSize: 14,
+          fontFamily: "'JetBrains Mono', monospace",
+          marginBottom: 20,
+          opacity: 0.8,
+        }}>
+          Proof complete.
+        </div>
+
+        {leanStub && (
+          <div style={{
+            background: '#070c18',
+            border: '1px solid #1a2540',
+            borderRadius: 6,
+            padding: '16px 18px',
+            marginBottom: 20,
+            overflowX: 'auto',
+          }}>
+            <div style={{
+              color: '#3d5a8a', fontSize: 9,
+              fontFamily: "'JetBrains Mono', monospace",
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              marginBottom: 10,
+            }}>
+              Lean 4 / Mathlib
+            </div>
+            <LeanCode code={leanStub} />
+          </div>
+        )}
+
+        <button onClick={onClose} style={{
+          ...st.btn,
+          color: '#6ee7b7',
+          borderColor: '#1a5a3a',
+          padding: '8px 22px',
+          fontSize: 12,
+        }}>
+          Continue →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const LEAN_KEYWORDS = new Set([
+  'import', 'variable', 'def', 'example', 'theorem', 'lemma',
+  'where', 'let', 'in', 'by', 'exact', 'rfl', 'sorry',
+  'open', 'namespace', 'end', 'section', 'noncomputable',
+]);
+
+function LeanCode({ code }) {
+  const lines = code.split('\n');
+  return (
+    <pre style={{
+      margin: 0,
+      fontFamily: "'JetBrains Mono', monospace",
+      fontSize: 12,
+      lineHeight: 1.7,
+      whiteSpace: 'pre-wrap',
+      wordBreak: 'break-word',
+    }}>
+      {lines.map((line, i) => (
+        <div key={i}>{highlightLean(line)}</div>
+      ))}
+    </pre>
+  );
+}
+
+function highlightLean(line) {
+  // Comments
+  if (line.trimStart().startsWith('--')) {
+    return <span style={{ color: '#3d5a8a' }}>{line}</span>;
+  }
+
+  // Tokenize and highlight
+  const parts = [];
+  const regex = /(\b\w+\b|[^\w\s]+|\s+)/g;
+  let m;
+  let idx = 0;
+  while ((m = regex.exec(line)) !== null) {
+    const token = m[0];
+    if (LEAN_KEYWORDS.has(token)) {
+      parts.push(<span key={idx} style={{ color: '#4db8ff' }}>{token}</span>);
+    } else if (/^[A-Z]/.test(token) && /^\w+$/.test(token)) {
+      parts.push(<span key={idx} style={{ color: '#c8d3ea' }}>{token}</span>);
+    } else if (/^:=?$/.test(token) || /^[{}()\[\]⟶∘]$/.test(token)) {
+      parts.push(<span key={idx} style={{ color: '#7b92b0' }}>{token}</span>);
+    } else {
+      parts.push(<span key={idx} style={{ color: '#8899b0' }}>{token}</span>);
+    }
+    idx++;
+  }
+  return parts;
 }

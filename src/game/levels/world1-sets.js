@@ -24,27 +24,37 @@ export const WORLD1_LEVELS = [
         { label: 'g : B \\to C', description: 'given' },
       ],
       inventory: [],
-      steps: [
-        { description: 'Draw g\\circ f : A \\to C', status: 'pending' },
-        { description: 'Mark triangle as commutative', status: 'pending' },
-      ],
     },
 
     goals: [
       {
-        type: 'construct_morphism',
+        id: 'g1',
+        type: 'draw_morphism',
         src: 'A',
         tgt: 'C',
-        label: 'g \\circ f',
-        justification: 'COMPOSITION',
+        description: 'Draw g\\circ f : A \\to C',
       },
       {
+        id: 'g2',
         type: 'mark_commutative',
-        paths: [['f', 'g'], ['g \\circ f']],
+        nodes: ['A', 'B', 'C'],
+        description: 'Mark the triangle as commutative',
+        dependsOn: 'g1',
       },
     ],
 
     awardsCard: 'COMPOSITION',
+
+    leanStub: `import Mathlib.CategoryTheory.Category.Basic
+
+variable {C : Type*} [Category C] {A B D : C}
+variable (f : A ⟶ B) (g : B ⟶ D)
+
+-- Composition
+def gf : A ⟶ D := g ∘ f
+
+-- Commutativity: the triangle commutes by definition
+example : g ∘ f = gf f g := rfl`,
 
     hints: [
       'The composite of f followed by g goes directly from A to C.',
