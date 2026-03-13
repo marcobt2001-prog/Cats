@@ -1,56 +1,11 @@
 import { TYPE_OPTIONS } from './defs.jsx';
 import { st } from './styles.js';
 
-export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, onUpdate, collapsed, onToggle }) {
+export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, onUpdate }) {
   const nodeLabel = id => nodes.find(n => n.id === id)?.label ?? '?';
 
-  if (collapsed) {
-    return (
-      <aside
-        onClick={onToggle}
-        style={{
-          width: 28,
-          background: '#0c1220',
-          borderLeft: '1px solid #1a2540',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          flexShrink: 0,
-          transition: 'width 200ms ease',
-          overflow: 'hidden',
-        }}
-      >
-        <div style={{
-          writingMode: 'vertical-rl',
-          textOrientation: 'mixed',
-          fontSize: 10,
-          letterSpacing: '0.13em',
-          textTransform: 'uppercase',
-          color: '#3d5a8a',
-          fontFamily: "'JetBrains Mono', monospace",
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          userSelect: 'none',
-        }}>
-          <span style={{ fontSize: 8 }}>◀</span>
-          Morphisms
-        </div>
-      </aside>
-    );
-  }
-
   return (
-    <aside style={{ ...st.panel, borderRight: 'none', borderLeft: '1px solid #1a2540', transition: 'width 200ms ease' }}>
-      <div style={{ ...st.panelHdr, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span>Morphisms</span>
-        <span
-          onClick={onToggle}
-          style={{ cursor: 'pointer', fontSize: 10, color: '#3d5a8a', userSelect: 'none' }}
-          title="Collapse panel"
-        >▶</span>
-      </div>
+    <>
       <div style={st.list}>
         {edges.map(e => {
           const active = sel?.type === 'edge' && sel.id === e.id;
@@ -116,7 +71,7 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
           <div style={st.empty}>No morphisms yet.<br/>Use "→ Draw" mode<br/>to create one.</div>
         )}
       </div>
-    </aside>
+    </>
   );
 }
 

@@ -4,6 +4,7 @@ import { Defs } from '../defs.jsx';
 import Edge from '../Edge.jsx';
 import Node from '../Node.jsx';
 import { st } from '../styles.js';
+import CollapsiblePanel from '../panels/CollapsiblePanel.jsx';
 import ProofLog from './ProofLog.jsx';
 import { useLevelState } from './LevelLoader.jsx';
 import { validateGoals } from './ValidationEngine.js';
@@ -411,11 +412,13 @@ function GameCanvas({ lv }) {
         {showComplete && <CompletionOverlay level={level} onClose={() => setShowComplete(false)} />}
       </div>
 
-      <ProofLog
-        given={level.proofLog.given}
-        inventory={level.proofLog.inventory}
-        steps={updatedSteps}
-      />
+      <CollapsiblePanel side="right" label="Proof Log" defaultOpen={false}>
+        <ProofLog
+          given={level.proofLog.given}
+          inventory={level.proofLog.inventory}
+          steps={updatedSteps}
+        />
+      </CollapsiblePanel>
     </div>
   );
 }

@@ -10,6 +10,7 @@ import AlignToolbar from './AlignToolbar.jsx';
 import { CONSTRUCTIONS } from './constructions.js';
 import { exportTikzCD, exportSVG, saveDiagramFile, loadDiagramFile } from './export.js';
 import { st } from './styles.js';
+import CollapsiblePanel from './panels/CollapsiblePanel.jsx';
 import GameMode from './game/GameMode.jsx';
 
 const DEFAULT_NODES = [
@@ -40,12 +41,15 @@ export default function App() {
         </span>
         {['editor', 'game'].map(m => (
           <button key={m} onClick={() => setAppMode(m)} style={{
-            padding: '0 16px', height: 38, fontSize: 10, letterSpacing: '0.12em',
-            textTransform: 'uppercase', cursor: 'pointer', border: 'none',
-            background: appMode === m ? '#0c1220' : 'transparent',
-            color: appMode === m ? '#4db8ff' : '#2d4a7a',
-            borderBottom: appMode === m ? '2px solid #4db8ff' : '2px solid transparent',
+            padding: '0 16px', height: 28, fontSize: 10, letterSpacing: '0.12em',
+            textTransform: 'uppercase', cursor: 'pointer',
+            border: `1px solid ${appMode === m ? '#4db8ff' : '#1e3a5a'}`,
+            borderRadius: 4,
+            background: appMode === m ? '#1e3a5a' : 'transparent',
+            color: appMode === m ? '#6ee7b7' : '#4a6a8a',
+            fontFamily: "'JetBrains Mono', monospace",
             transition: 'all 0.15s',
+            marginRight: m === 'editor' ? 4 : 0,
           }}>{m}</button>
         ))}
       </div>
@@ -177,10 +181,6 @@ function Editor() {
   const [clipboard, setClipboard] = useState(null);
   const [toast, setToast]       = useState('');
   const [showConstructions, setShowConstructions] = useState(false);
-  const [panelState, setPanelState] = useState({ left: 'open', right: 'open' });
-
-  const toggleLeft = () => setPanelState(p => ({ ...p, left: p.left === 'open' ? 'collapsed' : 'open' }));
-  const toggleRight = () => setPanelState(p => ({ ...p, right: p.right === 'open' ? 'collapsed' : 'open' }));
 
   const svgRef = useRef();
 
@@ -507,13 +507,13 @@ function Editor() {
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-      <ObjectPanel nodes={nodes} sel={sel}
-        onSelect={id => { setSel({ type: 'node', id }); setMultiSel(new Set()); }}
-        onDelete={deleteNode}
-        onLabelChange={(id, v) => updateNode(id, { label: v })}
-        onAdd={() => addNode()}
-        collapsed={panelState.left === 'collapsed'}
-        onToggle={toggleLeft} />
+      <CollapsiblePanel side="left" label="Objects" defaultOpen={true}>
+        <ObjectPanel nodes={nodes} sel={sel}
+          onSelect={id => { setSel({ type: 'node', id }); setMultiSel(new Set()); }}
+          onDelete={deleteNode}
+          onLabelChange={(id, v) => updateNode(id, { label: v })}
+          onAdd={() => addNode()} />
+      </CollapsiblePanel>
 
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '7px 10px',
@@ -626,11 +626,11 @@ function Editor() {
         )}
       </div>
 
-      <MorphismPanel edges={edges} nodes={nodes} sel={activeSel}
-        onSelect={id => { setSel({ type: 'edge', id }); setMultiSel(new Set()); }}
-        onDelete={deleteEdge} onUpdate={updateEdge}
-        collapsed={panelState.right === 'collapsed'}
-        onToggle={toggleRight} />
+      <CollapsiblePanel side="right" label="Morphisms" defaultOpen={true}>
+        <MorphismPanel edges={edges} nodes={nodes} sel={activeSel}
+          onSelect={id => { setSel({ type: 'edge', id }); setMultiSel(new Set()); }}
+          onDelete={deleteEdge} onUpdate={updateEdge} />
+      </CollapsiblePanel>
     </div>
   );
 }
