@@ -1,56 +1,26 @@
-import { useState, useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { LEVELS } from './levels/index.js';
+import { fromLegacyDiagram, createDiagram } from '../diagram/index.ts';
+import { useDiagramHistory } from '../useDiagramHistory.js';
 
-export function useLevelState(levelId) {
-  const level = LEVELS[levelId];
-  if (!level) return null;
+/**
+ * Diagram state for one level. The givens become the initial DiagramState;
+ * their ids are reported as locked so the canvas treats them as read-only.
+ * Hooks run unconditionally; `level` is null for an unknown id.
+ */
+export function useLevelDiagram(levelId) {
+  const level = LEVELS[levelId] ?? null;
 
-  // Given nodes/edges are locked
-  const givenNodes = useMemo(
-    () => level.givens.nodes.map(n => ({ ...n, locked: true })),
+  const initial = useMemo(
+    () => (level ? fromLegacyDiagram(level.givens.nodes, level.givens.edges).state : createDiagram()),
     [level],
   );
-  const givenEdges = useMemo(
-    () => level.givens.edges.map(e => ({ ...e, locked: true })),
-    [level],
-  );
+  const lockedNodeIds = useMemo(() => new Set(level ? level.givens.nodes.map(n => n.id) : []), [level]);
+  const lockedEdgeIds = useMemo(() => new Set(level ? level.givens.edges.map(e => e.id) : []), [level]);
 
-  // Player-drawn elements (no locked flag)
-  const [playerNodes, setPlayerNodes] = useState([]);
-  const [playerEdges, setPlayerEdges] = useState([]);
+  const history = useDiagramHistory(initial);
+  const { reset: resetHistory } = history;
+  const reset = useCallback(() => resetHistory(initial), [resetHistory, initial]);
 
-  // Merged view: givens first, then player-drawn
-  const nodes = useMemo(() => [...givenNodes, ...playerNodes], [givenNodes, playerNodes]);
-  const edges = useMemo(() => [...givenEdges, ...playerEdges], [givenEdges, playerEdges]);
-
-  // Setters that only touch player-drawn elements
-  const setNodes = (updater) => {
-    setPlayerNodes(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      return next;
-    });
-  };
-
-  const setEdges = (updater) => {
-    setPlayerEdges(prev => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      return next;
-    });
-  };
-
-  const reset = () => {
-    setPlayerNodes([]);
-    setPlayerEdges([]);
-  };
-
-  return {
-    level,
-    nodes,
-    edges,
-    setNodes,
-    setEdges,
-    reset,
-    givenNodeIds: new Set(givenNodes.map(n => n.id)),
-    givenEdgeIds: new Set(givenEdges.map(e => e.id)),
-  };
+  return { level, history, lockedNodeIds, lockedEdgeIds, reset };
 }

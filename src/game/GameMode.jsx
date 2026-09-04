@@ -1,19 +1,22 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
-import { R, uid, computeGeom } from '../geometry.js';
-import { Defs } from '../defs.jsx';
-import Edge from '../Edge.jsx';
-import Node from '../Node.jsx';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
+import Canvas from '../Canvas.jsx';
+import CommChecker from '../CommChecker.jsx';
+import { useSelection } from '../useSelection.js';
+import {
+  addObject, addMorphism, moveNodes as moveNodesOp, setCurve as setCurveOp, deleteElements as deleteElementsOp,
+  parallelPairs, isCommuting, toggleCommuting, commutingEdgeIds,
+} from '../diagram/index.ts';
 import { st } from '../styles.js';
 import CollapsiblePanel from '../panels/CollapsiblePanel.jsx';
 import ProofLog from './ProofLog.jsx';
-import { useLevelState } from './LevelLoader.jsx';
+import { useLevelDiagram } from './LevelLoader.jsx';
 import { validateGoals } from './ValidationEngine.js';
 import { markLevelComplete } from './completion.js';
 
 export default function GameMode({ levelId, onBackToSelect }) {
-  const lv = useLevelState(levelId);
+  const lv = useLevelDiagram(levelId);
 
-  if (!lv) {
+  if (!lv.level) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: '#3d5a8a', fontFamily: "'JetBrains Mono', monospace", fontSize: 12 }}>
@@ -26,49 +29,30 @@ export default function GameMode({ levelId, onBackToSelect }) {
 }
 
 function GameCanvas({ lv, onBackToSelect }) {
-  const { level, nodes, edges, setNodes, setEdges, givenNodeIds, givenEdgeIds, reset } = lv;
+  const { level, history, lockedNodeIds, lockedEdgeIds, reset } = lv;
+  const { state, views, getState, apply } = history;
+  const { nodes, edges } = views;
+
+  const selection = useSelection();
+  const { sel, clear } = selection;
 
   const [mode, setMode]       = useState('select');
   const [drawSrc, setDrawSrc] = useState(null);
-  const [mouse, setMouse]     = useState({ x: 0, y: 0 });
-  const [sel, setSel]         = useState(null);
-  const [dragging, setDragging] = useState(null);
-  const [curveDrag, setCurveDrag] = useState(null);
-  const [dragBox, setDragBox] = useState(null);
-  const [multiSel, setMultiSel] = useState(new Set());
   const [showHint, setShowHint] = useState(false);
-  const [showGrid, setShowGrid] = useState(true);
+  const [showComm, setShowComm] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
-  const [commEdgeIds, setCommEdgeIds] = useState(new Set());
 
   const svgRef = useRef();
   const completedOnceRef = useRef(false);
-
-  const pt = e => {
-    const r = svgRef.current.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  };
   const nodeById = id => nodes.find(n => n.id === id);
-  const edgeById = id => edges.find(e => e.id === id);
 
-  const selNodeIds = useMemo(() => {
-    const s = new Set();
-    multiSel.forEach(k => { if (k.startsWith('n:')) s.add(k.slice(2)); });
-    if (sel?.type === 'node') s.add(sel.id);
-    return s;
-  }, [multiSel, sel]);
-
-  const selEdgeIds = useMemo(() => {
-    const s = new Set();
-    multiSel.forEach(k => { if (k.startsWith('e:')) s.add(k.slice(2)); });
-    if (sel?.type === 'edge') s.add(sel.id);
-    return s;
-  }, [multiSel, sel]);
+  const commEdgeIds = useMemo(() => commutingEdgeIds(state), [state]);
+  const pairs = useMemo(() => parallelPairs(state), [state]);
 
   // Validation
   const { updatedSteps, levelComplete } = useMemo(
-    () => validateGoals(level.goals, nodes, edges, commEdgeIds),
-    [level.goals, nodes, edges, commEdgeIds],
+    () => validateGoals(level.goals, state),
+    [level.goals, state],
   );
 
   // Show completion overlay once and persist
@@ -80,183 +64,48 @@ function GameCanvas({ lv, onBackToSelect }) {
     }
   }, [levelComplete, level.id]);
 
-  // Toggle commutative on an edge
-  const toggleCommutative = (edgeId) => {
-    setCommEdgeIds(prev => {
-      const next = new Set(prev);
-      if (next.has(edgeId)) next.delete(edgeId);
-      else next.add(edgeId);
-      return next;
-    });
-  };
+  // Canvas callbacks (locked ids are enforced by Canvas; ops below never receive them)
+  const createNode = useCallback(({ x, y }) => {
+    const [next, id] = addObject(getState(), { x: x ?? 300, y: y ?? 300 });
+    apply(next);
+    return id;
+  }, [getState, apply]);
 
-  // Keyboard
-  useEffect(() => {
-    const h = e => {
-      const inInput = ['INPUT','SELECT','TEXTAREA'].includes(document.activeElement.tagName);
-      if (!inInput) {
-        if (e.key === 'Escape') { setMode('select'); setDrawSrc(null); setDragBox(null); }
-        if (e.key === '1') setMode('select');
-        if (e.key === '2') { setMode('addNode'); setDrawSrc(null); }
-        if (e.key === '3') { setMode('addEdge'); setDrawSrc(null); }
-        if (e.key === 'c' && !e.ctrlKey && !e.metaKey) {
-          // Toggle commutative on selected edge
-          if (sel?.type === 'edge') toggleCommutative(sel.id);
-        }
-        if (e.key === 'Delete' || e.key === 'Backspace') {
-          const nIds = new Set([...selNodeIds].filter(id => !givenNodeIds.has(id)));
-          const eIds = new Set([...selEdgeIds].filter(id => !givenEdgeIds.has(id)));
-          if (nIds.size > 0 || eIds.size > 0) {
-            setNodes(p => p.filter(n => !nIds.has(n.id)));
-            setEdges(p => p.filter(ed => !eIds.has(ed.id) && !nIds.has(ed.src) && !nIds.has(ed.tgt)));
-            // Also remove comm marks for deleted edges
-            setCommEdgeIds(prev => {
-              const next = new Set(prev);
-              eIds.forEach(id => next.delete(id));
-              return next;
-            });
-            setSel(null); setMultiSel(new Set());
-          }
-        }
-      }
+  const createEdge = useCallback(({ src, tgt }) => {
+    const [next, id] = addMorphism(getState(), { src, tgt });
+    apply(next);
+    return id;
+  }, [getState, apply]);
+
+  const moveNodes = useCallback((patches, opts) => {
+    const allowed = Object.fromEntries(Object.entries(patches).filter(([id]) => !lockedNodeIds.has(id)));
+    if (Object.keys(allowed).length === 0) return;
+    apply(s => moveNodesOp(s, allowed), opts);
+  }, [apply, lockedNodeIds]);
+
+  const setCurve = useCallback((id, curve, opts) => {
+    if (lockedEdgeIds.has(id)) return;
+    apply(s => setCurveOp(s, id, curve), opts);
+  }, [apply, lockedEdgeIds]);
+
+  const deleteElements = useCallback(({ nodeIds = [], edgeIds = [] }) => {
+    const sel = {
+      nodeIds: nodeIds.filter(id => !lockedNodeIds.has(id)),
+      edgeIds: edgeIds.filter(id => !lockedEdgeIds.has(id)),
     };
-    window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [selNodeIds, selEdgeIds, givenNodeIds, givenEdgeIds, sel]);
+    if (sel.nodeIds.length === 0 && sel.edgeIds.length === 0) return;
+    apply(s => deleteElementsOp(s, sel));
+  }, [apply, lockedNodeIds, lockedEdgeIds]);
 
-  // Mutators
-  const addNode = (x, y) => {
-    const label = String.fromCharCode(65 + (nodes.length % 26));
-    const id = uid('obj');
-    setNodes(p => [...p, { id, label, x: x ?? 300, y: y ?? 300 }]);
-    setSel({ type: 'node', id }); setMultiSel(new Set());
-  };
-
-  const updateNode = (id, patch) => {
-    if (givenNodeIds.has(id)) return;
-    setNodes(p => p.map(n => n.id === id ? { ...n, ...patch } : n));
-  };
-
-  const updateEdge = (id, patch) => {
-    if (givenEdgeIds.has(id)) return;
-    setEdges(p => p.map(e => e.id === id ? { ...e, ...patch } : e));
-  };
-
-  // SVG interaction
-  const onSvgMouseDown = e => {
-    if (e.target !== svgRef.current && !e.target.dataset.bg) return;
-    if (mode === 'addNode') return;
-    if (mode === 'select') {
-      const p = pt(e);
-      setDragBox({ x0: p.x, y0: p.y, x1: p.x, y1: p.y });
-      if (!e.shiftKey) { setSel(null); setMultiSel(new Set()); }
-    }
-  };
-
-  const onMouseMove = e => {
-    const p = pt(e);
-    setMouse(p);
-    if (dragging) {
-      if (givenNodeIds.has(dragging.id)) return;
-      const dx = p.x - dragging.lastX, dy = p.y - dragging.lastY;
-      setNodes(prev => prev.map(n =>
-        n.id === dragging.id ? { ...n, x: n.x + dx, y: n.y + dy } : n
-      ));
-      setDragging(d => ({ ...d, lastX: p.x, lastY: p.y }));
-    }
-    if (dragBox) setDragBox(b => ({ ...b, x1: p.x, y1: p.y }));
-    if (curveDrag) {
-      if (givenEdgeIds.has(curveDrag.edgeId)) return;
-      const dy = p.y - curveDrag.startY;
-      updateEdge(curveDrag.edgeId, { curve: Math.round(curveDrag.startCurve - dy * 0.8) });
-    }
-  };
-
-  const onMouseUp = () => {
-    if (dragBox) {
-      const { x0, y0, x1, y1 } = dragBox;
-      const minX = Math.min(x0,x1), maxX = Math.max(x0,x1);
-      const minY = Math.min(y0,y1), maxY = Math.max(y0,y1);
-      if (Math.abs(x1-x0) > 6 || Math.abs(y1-y0) > 6) {
-        const s = new Set(multiSel);
-        nodes.forEach(n => {
-          if (!n.locked && n.x >= minX && n.x <= maxX && n.y >= minY && n.y <= maxY)
-            s.add('n:' + n.id);
-        });
-        setMultiSel(s);
-      }
-      setDragBox(null);
-    }
-    setDragging(null); setCurveDrag(null);
-  };
-
-  const onBgClick = e => {
-    if (e.target !== svgRef.current && !e.target.dataset.bg) return;
-    if (mode === 'addNode') { const { x, y } = pt(e); addNode(x, y); return; }
-    if (!e.shiftKey) { setSel(null); setMultiSel(new Set()); }
-    setDrawSrc(null);
-  };
-
-  const onNodeMouseDown = (e, id) => {
-    e.stopPropagation();
-    if (mode === 'select') {
-      if (!givenNodeIds.has(id)) {
-        setSel({ type: 'node', id }); setMultiSel(new Set());
-        const p = pt(e);
-        setDragging({ id, lastX: p.x, lastY: p.y });
-      }
-    } else if (mode === 'addEdge') {
-      if (!drawSrc) { setDrawSrc(id); }
-      else {
-        const newEdge = { id: uid('e'), label: '', src: drawSrc, tgt: id, type: 'morphism', curve: 0, commutative: false };
-        setEdges(p => [...p, newEdge]);
-        setSel({ type: 'edge', id: newEdge.id }); setMultiSel(new Set());
-        setDrawSrc(null); setMode('select');
-      }
-    }
-  };
-
-  const onEdgeClick = (e, id) => {
-    e.stopPropagation();
-    if (mode !== 'select') return;
-    if (givenEdgeIds.has(id)) return;
-    setSel({ type: 'edge', id }); setMultiSel(new Set());
-  };
-
-  const onCurveAdjust = (e, edgeId) => {
-    e.stopPropagation();
-    if (givenEdgeIds.has(edgeId)) return;
-    const edge = edgeById(edgeId);
-    setCurveDrag({ edgeId, startY: pt(e).y, startCurve: edge.curve ?? 0 });
-  };
+  const togglePair = (src, tgt) => apply(s => toggleCommuting(s, src, tgt));
 
   const handleReset = () => {
     reset();
-    setCommEdgeIds(new Set());
-    setSel(null);
-    setMultiSel(new Set());
+    clear();
     setDrawSrc(null);
     setMode('select');
     setShowComplete(false);
     completedOnceRef.current = false;
-  };
-
-  const tempEdge = () => {
-    if (!drawSrc || mode !== 'addEdge') return null;
-    const src = nodeById(drawSrc); if (!src) return null;
-    const dx = mouse.x - src.x, dy = mouse.y - src.y, len = Math.hypot(dx,dy) || 1;
-    return <line x1={src.x+(dx/len)*R} y1={src.y+(dy/len)*R} x2={mouse.x} y2={mouse.y}
-      stroke="#7b92b0" strokeWidth={1.5} strokeDasharray="6 3"
-      markerEnd="url(#tip-tmp)" style={{ pointerEvents: 'none' }} />;
-  };
-
-  const dragBoxRect = () => {
-    if (!dragBox) return null;
-    const { x0, y0, x1, y1 } = dragBox;
-    return <rect x={Math.min(x0,x1)} y={Math.min(y0,y1)}
-      width={Math.abs(x1-x0)} height={Math.abs(y1-y0)}
-      fill="rgba(77,184,255,0.06)" stroke="#4db8ff" strokeWidth={1}
-      strokeDasharray="4 3" style={{ pointerEvents: 'none' }} />;
   };
 
   const ModeBtn = ({ m, label }) => (
@@ -267,8 +116,8 @@ function GameCanvas({ lv, onBackToSelect }) {
   const status =
     mode === 'addNode' ? 'Click to place object  ·  Esc' :
     mode === 'addEdge' ? (drawSrc ? `Source: ${nodeById(drawSrc)?.label}  ·  click target` : 'Click source  ·  Esc') :
-    sel?.type === 'edge' ? 'Selected  ·  C to toggle commutative  ·  Del to remove' :
-    'Select · 1/2/3 modes · C commute · Del remove';
+    sel ? 'Selected  ·  Del to remove  ·  ∘ Commutes to assert equations' :
+    'Select · 1/2/3 modes · ∘ Commutes · Del remove';
 
   return (
     <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -283,56 +132,30 @@ function GameCanvas({ lv, onBackToSelect }) {
         }}>
           <button
             onClick={onBackToSelect}
-            style={{
-              ...st.btn,
-              padding: '3px 8px',
-              fontSize: 9,
-              color: '#3d5a8a',
-              marginRight: 4,
-            }}
+            style={{ ...st.btn, padding: '3px 8px', fontSize: 9, color: '#3d5a8a', marginRight: 4 }}
           >
             ← Levels
           </button>
-          <span style={{
-            color: '#a78bfa', fontSize: 10,
-            fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em',
-          }}>
+          <span style={{ color: '#a78bfa', fontSize: 10, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.08em' }}>
             World {level.world} · {level.worldName}
           </span>
           <span style={{ color: '#3d5a8a', fontSize: 10, fontFamily: "'JetBrains Mono', monospace" }}>—</span>
-          <span style={{
-            color: '#c8d3ea', fontSize: 12,
-            fontFamily: "'JetBrains Mono', monospace", fontStyle: 'italic', flex: 1,
-          }}>
+          <span style={{ color: '#c8d3ea', fontSize: 12, fontFamily: "'JetBrains Mono', monospace", fontStyle: 'italic', flex: 1 }}>
             {level.title}
           </span>
-          <span style={{
-            color: '#2d4a7a', fontSize: 9,
-            fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em',
-          }}>
+          <span style={{ color: '#2d4a7a', fontSize: 9, fontFamily: "'JetBrains Mono', monospace", letterSpacing: '0.06em' }}>
             Aluffi {level.aluffiRef}
           </span>
           <button
             onClick={handleReset}
-            style={{
-              ...st.btn,
-              padding: '4px 10px',
-              fontSize: 10,
-              color: '#ef4444',
-              borderColor: '#3b1a1a',
-            }}
+            style={{ ...st.btn, padding: '4px 10px', fontSize: 10, color: '#ef4444', borderColor: '#3b1a1a' }}
           >
             ↺ Reset
           </button>
           <button
             onClick={() => setShowHint(h => !h)}
-            style={{
-              ...st.btn,
-              padding: '4px 10px',
-              fontSize: 10,
-              color: showHint ? '#a78bfa' : '#3d5a8a',
-              borderColor: showHint ? '#a78bfa' : undefined,
-            }}
+            style={{ ...st.btn, padding: '4px 10px', fontSize: 10,
+              color: showHint ? '#a78bfa' : '#3d5a8a', borderColor: showHint ? '#a78bfa' : undefined }}
           >
             ? Hint
           </button>
@@ -347,74 +170,38 @@ function GameCanvas({ lv, onBackToSelect }) {
           <ModeBtn m="select"  label="✦ Select" />
           <ModeBtn m="addNode" label="○ Add" />
           <ModeBtn m="addEdge" label="→ Draw" />
-          {sel?.type === 'edge' && !givenEdgeIds.has(sel.id) && (
-            <>
-              <div style={{ width: 1, height: 16, background: '#1a2540', margin: '0 2px' }} />
-              <button
-                onClick={() => toggleCommutative(sel.id)}
-                style={{
-                  ...(commEdgeIds.has(sel.id) ? st.btnActive : st.btn),
-                  color: commEdgeIds.has(sel.id) ? '#6ee7b7' : '#3d5a8a',
-                  borderColor: commEdgeIds.has(sel.id) ? '#6ee7b7' : undefined,
-                }}
-              >
-                ∘ Commute
-              </button>
-            </>
-          )}
+          <div style={{ width: 1, height: 16, background: '#1a2540', margin: '0 2px' }} />
+          <button onClick={() => setShowComm(p => !p)}
+            style={{ ...(showComm ? st.btnActive : st.btn),
+              color: showComm ? '#6ee7b7' : '#3d5a8a', borderColor: showComm ? '#6ee7b7' : undefined }}>
+            ∘ Commutes
+          </button>
+
           <div style={{ flex: 1 }} />
           <span style={{ color: '#1e3256', fontSize: 9, letterSpacing: '0.04em', lineHeight: 1.6 }}>
             {status}
           </span>
         </div>
 
-        {/* Canvas */}
-        <svg ref={svgRef}
-          style={{ flex: 1, cursor: mode === 'addNode' ? 'crosshair' : 'default', display: 'block' }}
-          onMouseDown={onSvgMouseDown} onMouseMove={onMouseMove}
-          onMouseUp={onMouseUp} onClick={onBgClick}>
-          <Defs />
-          <rect data-bg="1" width="100%" height="100%" fill="#0b0f1e" />
-          {showGrid && <rect data-bg="1" width="100%" height="100%" fill="url(#grid)" />}
+        <Canvas
+          nodes={nodes} edges={edges} commEdgeIds={commEdgeIds}
+          lockedNodeIds={lockedNodeIds} lockedEdgeIds={lockedEdgeIds}
+          selection={selection}
+          mode={mode} onModeChange={setMode} drawSrc={drawSrc} onDrawSrcChange={setDrawSrc}
+          snap={false} showGrid={true} svgRef={svgRef}
+          onCreateNode={createNode} onCreateEdge={createEdge}
+          onMoveNodes={moveNodes} onSetCurve={setCurve} onDelete={deleteElements} />
 
-          {edges.map(e => {
-            const src = nodeById(e.src), tgt = nodeById(e.tgt);
-            if (!src || !tgt) return null;
-            const isLocked = !!e.locked;
-            const isComm = commEdgeIds.has(e.id) || !!e.commutative;
-            return <Edge key={e.id} edge={e} src={src} tgt={tgt}
-              selected={!isLocked && selEdgeIds.has(e.id)}
-              commutative={isComm}
-              locked={isLocked}
-              onClick={ev => onEdgeClick(ev, e.id)}
-              onCurveAdjust={ev => onCurveAdjust(ev, e.id)} />;
-          })}
-
-          {tempEdge()}
-          {dragBoxRect()}
-
-          {nodes.map(n => {
-            const isLocked = !!n.locked;
-            return <Node key={n.id} node={n}
-              selected={!isLocked && selNodeIds.has(n.id)}
-              drawSrc={drawSrc}
-              locked={isLocked}
-              onMouseDown={onNodeMouseDown} />;
-          })}
-        </svg>
+        {showComm && <CommChecker nodes={nodes} edges={edges}
+          pairs={pairs} isCommuting={(src, tgt) => isCommuting(state, src, tgt)} onToggle={togglePair}
+          onClose={() => setShowComm(false)} />}
 
         {/* Hint bar */}
         {showHint && level.hints && level.hints.length > 0 && (
           <div style={{
-            padding: '10px 16px',
-            background: '#111828',
-            borderTop: '1px solid #1a2540',
-            color: '#a78bfa',
-            fontSize: 12,
-            fontFamily: "'JetBrains Mono', monospace",
-            fontStyle: 'italic',
-            lineHeight: 1.6,
-            flexShrink: 0,
+            padding: '10px 16px', background: '#111828', borderTop: '1px solid #1a2540',
+            color: '#a78bfa', fontSize: 12, fontFamily: "'JetBrains Mono', monospace",
+            fontStyle: 'italic', lineHeight: 1.6, flexShrink: 0,
           }}>
             <span style={{ color: '#3d5a8a', marginRight: 8, fontStyle: 'normal' }}>HINT:</span>
             {level.hints[0]}

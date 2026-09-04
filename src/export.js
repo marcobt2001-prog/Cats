@@ -1,3 +1,4 @@
+import { serializeCat, deserializeCat } from './diagram/index.ts';
 // ─── TikZ-CD export ───────────────────────────────────────────────────────────
 
 const TIKZ_ARROW = {
@@ -97,32 +98,10 @@ ${body}
 \\]`;
 }
 
-// ─── JSON save / load ─────────────────────────────────────────────────────────
+// ─── .cat save / load (v0.2; v0.1 files are migrated on load) ───────────────
 
-export function serializeDiagram(nodes, edges, commGroups, meta = {}) {
-  return JSON.stringify({
-    version: '0.1',
-    meta: { title: 'Untitled', date: new Date().toISOString(), ...meta },
-    nodes,
-    edges,
-    commGroups: Object.fromEntries(
-      Object.entries(commGroups).map(([k, v]) => [k, Array.isArray(v) ? v : [...v]])
-    ),
-  }, null, 2);
-}
-
-export function deserializeDiagram(json) {
-  const data = JSON.parse(json);
-  return {
-    nodes: data.nodes || [],
-    edges: data.edges || [],
-    commGroups: data.commGroups || {},
-    meta: data.meta || {},
-  };
-}
-
-export function saveDiagramFile(nodes, edges, commGroups, filename = 'diagram.cat') {
-  const json = serializeDiagram(nodes, edges, commGroups);
+export function saveDiagramFile(state, filename = 'diagram.cat', meta = {}) {
+  const json = serializeCat(state, meta);
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -130,6 +109,10 @@ export function saveDiagramFile(nodes, edges, commGroups, filename = 'diagram.ca
   URL.revokeObjectURL(url);
 }
 
+/**
+ * Opens a file picker. Resolves to `{ state, meta, warnings }`, or to `null`
+ * when the picker is cancelled. Rejects on unreadable or invalid files.
+ */
 export function loadDiagramFile() {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
@@ -137,14 +120,16 @@ export function loadDiagramFile() {
     input.accept = '.cat,.json';
     input.onchange = e => {
       const file = e.target.files[0];
-      if (!file) return;
+      if (!file) { resolve(null); return; }
       const reader = new FileReader();
       reader.onload = ev => {
-        try { resolve(deserializeDiagram(ev.target.result)); }
+        try { resolve(deserializeCat(ev.target.result)); }
         catch (err) { reject(err); }
       };
+      reader.onerror = () => reject(reader.error ?? new Error('could not read file'));
       reader.readAsText(file);
     };
+    input.oncancel = () => resolve(null);
     input.click();
   });
 }

@@ -1,20 +1,23 @@
-import { findAllPaths } from '../geometry.js';
+import { morphismsOf } from '../math/index.ts';
+import { isCommuting } from '../diagram/index.ts';
 
 /**
- * Validate level goals against current diagram state.
+ * Validate level goals against the current diagram state.
  *
- * @param {Array} goals       – goal objects from the level definition
- * @param {Array} nodes       – all nodes (given + player)
- * @param {Array} edges       – all edges (given + player)
- * @param {Set}   commEdgeIds – set of edge IDs currently marked commutative
+ * @param {Array} goals  – goal objects from the level definition
+ * @param {object} state – DiagramState ({ doc, layout })
  * @returns {{ updatedGoals, updatedSteps, levelComplete }}
+ *
+ * Goal types (Phase 2; Phase 3 replaces these with real propositions):
+ *   draw_morphism     { src, tgt }   – some morphism src → tgt exists
+ *   mark_commutative  { nodes }      – every path from nodes[0] to nodes[last] is
+ *                                      asserted equal by the document's hypotheses
  */
-export function validateGoals(goals, nodes, edges, commEdgeIds) {
+export function validateGoals(goals, state) {
   const statusMap = {};
+  const morphisms = morphismsOf(state.doc.context);
 
-  // First pass: evaluate each goal (skip dependency-blocked ones)
   const updatedGoals = goals.map(goal => {
-    // Check dependency
     if (goal.dependsOn) {
       const dep = goals.find(g => g.id === goal.dependsOn);
       if (dep && statusMap[dep.id] !== 'verified') {
@@ -26,27 +29,13 @@ export function validateGoals(goals, nodes, edges, commEdgeIds) {
     let verified = false;
 
     if (goal.type === 'draw_morphism') {
-      // Check that an edge exists with correct src and tgt node ids
-      verified = edges.some(e => e.src === goal.src && e.tgt === goal.tgt);
+      verified = morphisms.some(m => m.source === goal.src && m.target === goal.tgt);
     }
 
     if (goal.type === 'mark_commutative') {
-      // Check that at least two paths exist between relevant nodes,
-      // and that all edges in those paths are marked commutative
       const goalNodes = goal.nodes;
       if (goalNodes && goalNodes.length >= 2) {
-        const start = goalNodes[0];
-        const end = goalNodes[goalNodes.length - 1];
-
-        // Find all paths from start to end
-        const paths = findAllPaths(start, end, edges, nodes);
-
-        if (paths.length >= 2) {
-          // All edges involved in these paths must be commutative
-          const allPathEdgeIds = new Set();
-          paths.forEach(p => p.path.forEach(eid => allPathEdgeIds.add(eid)));
-          verified = [...allPathEdgeIds].every(eid => commEdgeIds.has(eid));
-        }
+        verified = isCommuting(state, goalNodes[0], goalNodes[goalNodes.length - 1]);
       }
     }
 
@@ -55,12 +44,7 @@ export function validateGoals(goals, nodes, edges, commEdgeIds) {
     return { ...goal, status };
   });
 
-  // Build updated steps from goals
-  const updatedSteps = updatedGoals.map(g => ({
-    description: g.description,
-    status: g.status === 'blocked' ? 'blocked' : g.status,
-  }));
-
+  const updatedSteps = updatedGoals.map(g => ({ description: g.description, status: g.status }));
   const levelComplete = updatedGoals.every(g => g.status === 'verified');
 
   return { updatedGoals, updatedSteps, levelComplete };

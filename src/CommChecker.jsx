@@ -1,35 +1,14 @@
-import { useMemo } from 'react';
-import { findAllPaths } from './geometry.js';
 import { st } from './styles.js';
 
-export default function CommChecker({ nodes, edges, commGroups, onToggleGroup, onClose }) {
+/**
+ * Lists every pair of objects joined by two or more paths and lets the user
+ * assert that the paths are equal. Purely presentational: `pairs` comes from
+ * `parallelPairs(state)`, `isCommuting(src, tgt)` and `onToggle(src, tgt)`
+ * from the owner.
+ */
+export default function CommChecker({ nodes, edges, pairs, isCommuting, onToggle, onClose }) {
   const nodeLabel = id => nodes.find(n => n.id === id)?.label ?? id;
-
-  // For each pair of nodes, find all paths and group them
-  const analysis = useMemo(() => {
-    const results = [];
-    const seen = new Set();
-    for (const src of nodes) {
-      for (const tgt of nodes) {
-        if (src.id === tgt.id) continue;
-        const key = `${src.id}→${tgt.id}`;
-        if (seen.has(key)) continue;
-        const paths = findAllPaths(src.id, tgt.id, edges, nodes);
-        if (paths.length >= 2) {
-          seen.add(key);
-          results.push({ src: src.id, tgt: tgt.id, paths });
-        }
-      }
-    }
-    return results;
-  }, [nodes, edges]);
-
-  const groupKey = (srcId, tgtId) => `${srcId}|${tgtId}`;
-
-  const edgeLabel = id => {
-    const e = edges.find(e => e.id === id);
-    return e?.label || '—';
-  };
+  const edgeLabel = id => edges.find(e => e.id === id)?.label || '—';
 
   return (
     <div style={{
@@ -45,18 +24,17 @@ export default function CommChecker({ nodes, edges, commGroups, onToggleGroup, o
 
       <div style={{ padding: '10px 14px', color: '#3d5a8a', fontSize: 11, fontFamily: 'monospace',
         borderBottom: '1px solid #1a2540', lineHeight: 1.6 }}>
-        Pairs with multiple paths. Toggle to mark as commutative (highlights edges in teal).
+        Pairs with multiple paths. Mark a pair to assert that its paths are equal (highlights edges in teal).
       </div>
 
       <div style={{ overflowY: 'auto', flex: 1 }}>
-        {analysis.length === 0 && (
+        {pairs.length === 0 && (
           <div style={st.empty}>No parallel paths found.<br/>Add more morphisms to check commutativity.</div>
         )}
-        {analysis.map(({ src, tgt, paths }) => {
-          const gk = groupKey(src, tgt);
-          const active = !!commGroups[gk];
+        {pairs.map(({ src, tgt, paths }) => {
+          const active = isCommuting(src, tgt);
           return (
-            <div key={gk} style={{
+            <div key={`${src}|${tgt}`} style={{
               padding: '10px 14px', borderBottom: '1px solid #111928',
               background: active ? '#0a1e18' : 'transparent',
             }}>
@@ -65,7 +43,7 @@ export default function CommChecker({ nodes, edges, commGroups, onToggleGroup, o
                   fontStyle: 'italic', fontSize: 15 }}>
                   {nodeLabel(src)} → {nodeLabel(tgt)}
                 </span>
-                <button onClick={() => onToggleGroup(gk, paths.flatMap(p => p.path))}
+                <button onClick={() => onToggle(src, tgt)}
                   style={{
                     padding: '3px 10px', fontSize: 10, fontFamily: 'monospace',
                     background: active ? '#1a4a38' : '#162038',
@@ -79,12 +57,12 @@ export default function CommChecker({ nodes, edges, commGroups, onToggleGroup, o
               {paths.map((p, i) => (
                 <div key={i} style={{ color: '#3d5a8a', fontSize: 11, fontFamily: 'monospace',
                   paddingLeft: 8, marginBottom: 2 }}>
-                  path {i + 1}: {p.labels.map((l, j) => (
+                  path {i + 1}: {(p.length === 0 ? ['id'] : p).map((id, j) => (
                     <span key={j}>
                       <span style={{ color: '#5a82c8', fontFamily: "'Crimson Text', serif", fontStyle: 'italic' }}>
-                        {l || '—'}
+                        {p.length === 0 ? 'id' : edgeLabel(id)}
                       </span>
-                      {j < p.labels.length - 1 && <span style={{ color: '#2d4070' }}> ∘ </span>}
+                      {j < p.length - 1 && <span style={{ color: '#2d4070' }}> ∘ </span>}
                     </span>
                   ))}
                 </div>

@@ -1,7 +1,7 @@
 import { TYPE_OPTIONS } from './defs.jsx';
 import { st } from './styles.js';
 
-export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, onUpdate }) {
+export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, onRename, onSetType, onSetCurve }) {
   const nodeLabel = id => nodes.find(n => n.id === id)?.label ?? '?';
 
   return (
@@ -12,7 +12,7 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
           return (
             <div key={e.id}
               style={{ ...st.item(active), flexDirection: 'column', alignItems: 'stretch', gap: 5 }}
-              onClick={() => onSelect({ type: 'edge', id: e.id })}>
+              onClick={() => onSelect('edge', e.id)}>
               {/* summary row */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: '#4db8ff', fontSize: 13, minWidth: 18, fontFamily: 'monospace' }}>→</span>
@@ -29,7 +29,7 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
                   onClick={ev => ev.stopPropagation()}>
 
                   <Row label="label">
-                    <input value={e.label} onChange={ev => onUpdate(e.id, { label: ev.target.value })}
+                    <input value={e.label} onChange={ev => onRename(e.id, ev.target.value)}
                       placeholder="f" style={st.input} />
                     <span style={{ color: '#3d5a8a', fontSize: 10, fontFamily: 'monospace', marginTop: 2 }}>
                       LaTeX ok
@@ -37,7 +37,7 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
                   </Row>
 
                   <Row label="type">
-                    <select value={e.type} onChange={ev => onUpdate(e.id, { type: ev.target.value })}
+                    <select value={e.type} onChange={ev => onSetType(e.id, ev.target.value)}
                       style={st.select}>
                       {TYPE_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.t}</option>)}
                     </select>
@@ -45,22 +45,11 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
 
                   <Row label="curve">
                     <input type="range" min={-140} max={140} value={e.curve ?? 0}
-                      onChange={ev => onUpdate(e.id, { curve: Number(ev.target.value) })}
+                      onChange={ev => onSetCurve(e.id, Number(ev.target.value))}
                       style={{ flex: 1 }} />
                     <span style={{ color: '#4db8ff', fontSize: 11, fontFamily: 'monospace', minWidth: 30, textAlign: 'right' }}>
                       {e.curve ?? 0}
                     </span>
-                  </Row>
-
-                  <Row label="commute">
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-                      <input type="checkbox" checked={!!e.commutative}
-                        onChange={ev => onUpdate(e.id, { commutative: ev.target.checked })}
-                        style={{ accentColor: '#6ee7b7' }} />
-                      <span style={{ color: '#6ee7b7', fontSize: 11, fontFamily: 'monospace' }}>
-                        mark commutative
-                      </span>
-                    </label>
                   </Row>
                 </div>
               )}

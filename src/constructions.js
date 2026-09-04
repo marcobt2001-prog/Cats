@@ -1,187 +1,82 @@
-import { uid } from './geometry.js';
+// Common constructions as pure data in the legacy visual shape, with local ids.
+// Positions are relative; the editor centers the fragment in the viewport and
+// mergeDiagram mints fresh ids, so templates never collide with the document.
+// Commutativity is expressed with `commGroups` ("src|tgt" → edge ids), which
+// becomes an equality hypothesis on insertion.
 
-// Each template returns { nodes, edges } with relative positions.
-// The caller offsets them to center in the viewport.
-
-function n(label, x, y) { return { id: uid('obj'), label, x, y }; }
-function e(label, src, tgt, type = 'morphism', curve = 0, commutative = false) {
-  return { id: uid('e'), label, src, tgt, type, curve, commutative };
-}
+const n = (id, label, x, y) => ({ id, label, x, y });
+const e = (id, label, src, tgt, type = 'morphism', curve = 0) => ({ id, label, src, tgt, type, curve });
 
 export const CONSTRUCTIONS = [
   {
     name: 'Product',
     desc: 'A, B with A\\times B and projections \\pi_1, \\pi_2',
-    symbol: '\u00D7',
-    build() {
-      const A = n('A', 0, 0);
-      const B = n('B', 340, 0);
-      const P = n('A \\times B', 170, -160);
-      return {
-        nodes: [A, B, P],
-        edges: [
-          e('\\pi_1', P.id, A.id),
-          e('\\pi_2', P.id, B.id),
-        ],
-      };
-    },
+    symbol: '×',
+    nodes: [n('A', 'A', 0, 0), n('B', 'B', 340, 0), n('P', 'A \\times B', 170, -160)],
+    edges: [e('p1', '\\pi_1', 'P', 'A'), e('p2', '\\pi_2', 'P', 'B')],
   },
   {
     name: 'Coproduct',
     desc: 'A, B with A\\sqcup B and injections i_1, i_2',
-    symbol: '\u2294',
-    build() {
-      const A = n('A', 0, 0);
-      const B = n('B', 340, 0);
-      const C = n('A \\sqcup B', 170, 160);
-      return {
-        nodes: [A, B, C],
-        edges: [
-          e('i_1', A.id, C.id),
-          e('i_2', B.id, C.id),
-        ],
-      };
-    },
+    symbol: '⊔',
+    nodes: [n('A', 'A', 0, 0), n('B', 'B', 340, 0), n('C', 'A \\sqcup B', 170, 160)],
+    edges: [e('i1', 'i_1', 'A', 'C'), e('i2', 'i_2', 'B', 'C')],
   },
   {
     name: 'Pullback',
     desc: 'Pullback square with universal arrow',
-    symbol: '\u27D5',
-    build() {
-      const P = n('P', 0, 0);
-      const A = n('A', 240, 0);
-      const B = n('B', 0, 200);
-      const C = n('C', 240, 200);
-      return {
-        nodes: [P, A, B, C],
-        edges: [
-          e('p_1', P.id, A.id),
-          e('p_2', P.id, B.id),
-          e('f', A.id, C.id),
-          e('g', B.id, C.id),
-        ],
-      };
-    },
+    symbol: '⟕',
+    nodes: [n('P', 'P', 0, 0), n('A', 'A', 240, 0), n('B', 'B', 0, 200), n('C', 'C', 240, 200)],
+    edges: [e('p1', 'p_1', 'P', 'A'), e('p2', 'p_2', 'P', 'B'), e('f', 'f', 'A', 'C'), e('g', 'g', 'B', 'C')],
   },
   {
     name: 'Pushout',
     desc: 'Pushout square with universal arrow',
-    symbol: '\u27D6',
-    build() {
-      const A = n('A', 0, 0);
-      const B = n('B', 240, 0);
-      const C = n('C', 0, 200);
-      const P = n('P', 240, 200);
-      return {
-        nodes: [A, B, C, P],
-        edges: [
-          e('f', A.id, B.id),
-          e('g', A.id, C.id),
-          e('i_1', B.id, P.id),
-          e('i_2', C.id, P.id),
-        ],
-      };
-    },
+    symbol: '⟖',
+    nodes: [n('A', 'A', 0, 0), n('B', 'B', 240, 0), n('C', 'C', 0, 200), n('P', 'P', 240, 200)],
+    edges: [e('f', 'f', 'A', 'B'), e('g', 'g', 'A', 'C'), e('i1', 'i_1', 'B', 'P'), e('i2', 'i_2', 'C', 'P')],
   },
   {
     name: 'Quotient Map',
     desc: 'A \\to A/\\sim with canonical projection',
     symbol: 'A/~',
-    build() {
-      const A = n('A', 0, 0);
-      const Q = n('A/\\!\\sim', 240, 0);
-      return {
-        nodes: [A, Q],
-        edges: [
-          e('q', A.id, Q.id, 'epi'),
-        ],
-      };
-    },
+    nodes: [n('A', 'A', 0, 0), n('Q', 'A/\\!\\sim', 240, 0)],
+    edges: [e('q', 'q', 'A', 'Q', 'epi')],
   },
   {
     name: 'Kernel / Cokernel',
     desc: '\\ker f \\to A \\to B \\to \\mathrm{coker}\\, f',
     symbol: 'ker/coker',
-    build() {
-      const K = n('\\ker f', 0, 0);
-      const A = n('A', 200, 0);
-      const B = n('B', 400, 0);
-      const C = n('\\mathrm{coker}\\, f', 600, 0);
-      return {
-        nodes: [K, A, B, C],
-        edges: [
-          e('\\iota', K.id, A.id, 'mono'),
-          e('f', A.id, B.id),
-          e('\\pi', B.id, C.id, 'epi'),
-        ],
-      };
-    },
+    nodes: [n('K', '\\ker f', 0, 0), n('A', 'A', 200, 0), n('B', 'B', 400, 0), n('C', '\\mathrm{coker}\\, f', 600, 0)],
+    edges: [e('i', '\\iota', 'K', 'A', 'mono'), e('f', 'f', 'A', 'B'), e('p', '\\pi', 'B', 'C', 'epi')],
   },
   {
     name: 'Adjunction',
     desc: 'F \\dashv G with unit \\eta and counit \\varepsilon',
-    symbol: '\u22A3',
-    build() {
-      const C = n('\\mathcal{C}', 0, 0);
-      const D = n('\\mathcal{D}', 300, 0);
-      return {
-        nodes: [C, D],
-        edges: [
-          e('F', C.id, D.id, 'morphism', -50),
-          e('G', D.id, C.id, 'morphism', -50),
-        ],
-      };
-    },
+    symbol: '⊣',
+    nodes: [n('C', '\\mathcal{C}', 0, 0), n('D', '\\mathcal{D}', 300, 0)],
+    edges: [e('F', 'F', 'C', 'D', 'morphism', -50), e('G', 'G', 'D', 'C', 'morphism', -50)],
   },
   {
     name: 'Exact Sequence',
     desc: 'A \\to B \\to C with composition zero',
-    symbol: '\u2192\u2192',
-    build() {
-      const A = n('A', 0, 0);
-      const B = n('B', 200, 0);
-      const C = n('C', 400, 0);
-      return {
-        nodes: [A, B, C],
-        edges: [
-          e('f', A.id, B.id, 'mono'),
-          e('g', B.id, C.id, 'epi'),
-        ],
-      };
-    },
+    symbol: '→→',
+    nodes: [n('A', 'A', 0, 0), n('B', 'B', 200, 0), n('C', 'C', 400, 0)],
+    edges: [e('f', 'f', 'A', 'B', 'mono'), e('g', 'g', 'B', 'C', 'epi')],
   },
   {
     name: 'Identity Morphism',
     desc: 'Self-loop \\mathrm{id}_A on an object',
     symbol: 'id',
-    build() {
-      const A = n('A', 0, 0);
-      return {
-        nodes: [A],
-        edges: [
-          e('\\mathrm{id}_A', A.id, A.id),
-        ],
-      };
-    },
+    nodes: [n('A', 'A', 0, 0)],
+    edges: [e('id', '\\mathrm{id}_A', 'A', 'A')],
   },
   {
     name: 'Commutative Square',
     desc: 'Four objects with four morphisms, marked commutative',
-    symbol: '\u25A1',
-    build() {
-      const A = n('A', 0, 0);
-      const B = n('B', 240, 0);
-      const C = n('C', 0, 200);
-      const D = n('D', 240, 200);
-      return {
-        nodes: [A, B, C, D],
-        edges: [
-          e('f', A.id, B.id, 'morphism', 0, true),
-          e('g', A.id, C.id, 'morphism', 0, true),
-          e('h', B.id, D.id, 'morphism', 0, true),
-          e('k', C.id, D.id, 'morphism', 0, true),
-        ],
-      };
-    },
+    symbol: '□',
+    nodes: [n('A', 'A', 0, 0), n('B', 'B', 240, 0), n('C', 'C', 0, 200), n('D', 'D', 240, 200)],
+    edges: [e('f', 'f', 'A', 'B'), e('g', 'g', 'A', 'C'), e('h', 'h', 'B', 'D'), e('k', 'k', 'C', 'D')],
+    commGroups: { 'A|D': ['f', 'g', 'h', 'k'] },
   },
 ];

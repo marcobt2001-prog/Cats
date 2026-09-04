@@ -22,8 +22,10 @@ export default function Node({ node, selected, drawSrc, onMouseDown, locked }) {
     : (selected || isDrawSource) ? 2.5 : 1.5;
   const fillColor = locked ? '#101828' : '#141d30';
 
+  // Always report the gesture; the canvas decides what a locked node may do
+  // (it can be a morphism endpoint but not be moved, selected, or deleted).
   return (
-    <g onMouseDown={locked ? undefined : (e => onMouseDown(e, node.id))}
+    <g onMouseDown={e => onMouseDown(e, node.id)}
       style={{ cursor: locked ? 'default' : 'pointer' }}
       filter={!locked && selected ? 'url(#glow)' : undefined}
       opacity={locked ? 0.7 : 1}>

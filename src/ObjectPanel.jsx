@@ -1,6 +1,6 @@
 import { st } from './styles.js';
 
-export default function ObjectPanel({ nodes, sel, onSelect, onDelete, onLabelChange, onAdd }) {
+export default function ObjectPanel({ nodes, sel, onSelect, onDelete, onRename, onAdd }) {
   return (
     <>
       <div style={st.list}>
@@ -8,11 +8,11 @@ export default function ObjectPanel({ nodes, sel, onSelect, onDelete, onLabelCha
           const active = sel?.type === 'node' && sel.id === n.id;
           return (
             <div key={n.id} style={st.item(active)}
-              onClick={() => onSelect({ type: 'node', id: n.id })}>
+              onClick={() => onSelect('node', n.id)}>
               <span style={{ color: '#3d5a8a', fontSize: 11, fontFamily: 'monospace', minWidth: 16 }}>○</span>
               <input
                 value={n.label}
-                onChange={e => onLabelChange(n.id, e.target.value)}
+                onChange={e => onRename(n.id, e.target.value)}
                 onClick={e => e.stopPropagation()}
                 placeholder="A"
                 style={{ ...st.input, flex: 1 }}

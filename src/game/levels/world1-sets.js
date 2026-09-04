@@ -209,7 +209,7 @@ variable (f : A ⟶ B) (g : A ⟶ D) (h : B ⟶ E) (k : D ⟶ E)
 example (sq : CommSq f g h k) : f ≫ h = g ≫ k := sq.w`,
 
     hints: [
-      'Select each morphism and press C (or click "∘ Commute") to mark all four edges as commutative.',
+      'Open "∘ Commutes", find the pair A → D, and click "mark" to assert that both paths around the square are equal.',
     ],
   },
 ];
