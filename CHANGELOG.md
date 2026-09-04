@@ -4,6 +4,59 @@ All notable changes to this project will be documented in this file.
 
 <!-- New entries go here, newest first -->
 
+## 2026-09-04 — v0.7: Diagram state separated from mathematical state (Phase 2)
+
+### State model
+- The editor and the game now hold one `DiagramState = { doc: MathDocument, layout }`; positions and curves live in `layout`, everything mathematical in `doc`. Moving a node cannot change the mathematics.
+- New pure module `src/diagram/` (TypeScript, tested): operations, commutativity, views, legacy import, merge, `.cat` serialization, undo history
+- Arrow styles split: mono/epi/iso are morphism properties in the document; dashed/dotted/natural/exact/equiv are visual decorations in the layout
+- Commutativity is now a set of equality hypotheses in the document, undoable, and pruned when a morphism is deleted. The per-morphism "commutative" checkbox and the game's per-edge `C` key are removed; both modes use the Commutes panel
+- `.cat` format v0.2 `{ version, meta, math, layout }`; v0.1 files are migrated on load (old `commutative` flags become equations where they covered a full pair of paths; a warning count is shown otherwise)
+
+### Shared canvas
+- New `src/Canvas.jsx` replaces the duplicated interaction code in `App.jsx` and `GameMode.jsx`; `useSelection.js` and `useDiagramHistory.js` hold selection and undo state
+- Given elements in the game are id sets passed to the canvas (locked), never stored in state or files
+- Multi-select and edge marquee now work the same in both modes
+
+### Fixes absorbed by the refactor
+- Ids come from the document counter: paste, template insertion, and reloading a file no longer risk collisions
+- A drag or slider session is one undo entry (previously one per mouse event); Undo/Redo buttons disable when unavailable
+- Clicking a row in the Objects or Morphisms panel now selects that element
+- `LevelLoader` no longer calls hooks after an early return; `GameMode` is keyed by level id so state resets on level change
+- Loading a file settles the promise on cancel and read errors
+- Given (locked) objects can now be used as morphism endpoints in the game: `Node.jsx` no longer swallows the mouse gesture, the canvas applies the locked policy instead. Level I-1 was not completable before this fix
+- Removed dead code: `uid`, `findAllPaths`, `detectCycles` from `geometry.js`
+
+### Verification
+- `npm run check`: 16 test files, 113 tests; `npm run build` clean
+- Browser smoke test (Playwright against Chrome): 26 checks across editor and game flows, no console errors
+
+### Files
+- New: `src/diagram/**`, `src/Canvas.jsx`, `src/useSelection.js`, `src/useDiagramHistory.js`, `src/defaults.js`, `src/math/paths.ts`, `docs/PHASE2-PLAN.md`, `src/game/__tests__/ValidationEngine.test.ts`
+- Changed: `App.jsx`, `GameMode.jsx`, `LevelLoader.jsx`, `ValidationEngine.js`, `CommChecker.jsx`, `MorphismPanel.jsx`, `ObjectPanel.jsx`, `export.js`, `constructions.js`, `geometry.js`, `world1-sets.js` (I-4 hint), `src/math/context.ts`, `src/math/fromDiagram.ts`
+
+## 2026-09-04 — v0.6: Mathematical Core (Phase 1)
+
+### Architecture assessment
+- Added `ARCHITECTURE.md`: current-state audit, target three-layer architecture (UI / mathematical IR / Lean), and the phase-by-phase refactoring path
+- Baseline verified before changes: `npm run build` produced the identical bundle already in `dist/`
+
+### `src/math/` — pure TypeScript mathematical IR (no React, no existing file touched)
+- `types.ts` — objects, morphisms, identity, n-ary composition, equality propositions, ordered context, goals, steps, optional Lean references
+- `expr.ts` — constructors, typing (`typeOf` / `source` / `target`), `normalize` (associativity + unit laws), structural and up-to-axioms equality
+- `context.ts` — documents with an in-document id counter, declarations, lookups, validation
+- `proof.ts` — goals, steps, `tryCloseByNormalization` (marks goals `believed`, never `verified`)
+- `print.ts` — diagrammatic (`f ≫ g`, `𝟙 A`) and classical (`g ∘ f`, `id_A`) printers
+- `serialize.ts` — versioned JSON with validation on load
+- `fromDiagram.ts` — adapter from the canvas shape (`nodes`, `edges`, `commGroups`) to a `MathContext`; positions are ignored
+- Composition is stored in diagrammatic order to match `findAllPaths`, Mathlib `≫`, and the existing level stubs
+- `GoalStatus.verified` requires `authority: 'lean'`; nothing in `src/math` constructs it
+
+### Tooling
+- Added `typescript` and `vitest` dev dependencies; `tsconfig.json` checks `src/math/**` only; `vitest.config.js` is separate from `vite.config.js`
+- New scripts: `npm test`, `npm run test:watch`, `npm run typecheck`, `npm run check`
+- Tests cover typing, normalization, context validation, printing, proof steps, serialization round-trip, and the diagram adapter (including level I-4 and a move-invariance check)
+
 ## 2026-03-13 — v0.5: World Select, More Levels, Completion Persistence
 
 ### World / Level Select Screen
