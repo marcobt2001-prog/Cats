@@ -4,6 +4,48 @@ All notable changes to this project will be documented in this file.
 
 <!-- New entries go here, newest first -->
 
+## 2026-09-04 — v0.8: Semantic diagram interpretation (Phase 3)
+
+### Labels mean something
+
+- A morphism can carry a `definition`: an arrow labelled `g \circ f` now *is* that composite, not a string that looks like one. Typing a composite or identity label sets the definition; a plain name clears it
+- New label grammar (`src/math/label.ts`): `g \circ f`, `g∘f`, `f \gg g`, `f ≫ g`, parentheses, and the identity spellings `\mathrm{id}_A`, `id_A`, `1_A`, `𝟙 A`. Names are matched against the context and must be unambiguous; the result is type-checked against the arrow's own endpoints
+- Renaming a morphism or object re-prints every label defined through it (`f` → `\phi` turns `g \circ f` into `g \circ \phi`), in the same undo entry
+- The Morphisms panel shows what a label means: `= g ∘ f (by definition)`, `atomic morphism`, or `cannot resolve: unknown morphism 'x'`
+
+### One notion of equality
+
+- `entails` (`src/math/entail.ts`) decides every equality question: unfold definitions, normalize, then search the equality hypotheses, reporting which ones it used. `isCommuting` and the level goals both go through it
+- A pair can commute **by definition**, with no equation at all. The Commutes panel says so and disables the toggle, since there is nothing left to assert
+- Deliberately no congruence: `h ∘ f = k ∘ g` does not entail `h ∘ f ∘ x = k ∘ g ∘ x`. CATS' own reasoning stays `believed`; Lean does the rest (Phase 4)
+
+### Commutativity panel
+
+- Shows each path as the expression it denotes (`g ∘ f`) instead of joining labels, which fixes a real bug: paths were printed in path order using the classical `∘` symbol, i.e. backwards
+- Lists the equations asserted at each pair, and offers a "compose" button that adds an arrow defined as that path
+
+### Levels are propositions
+
+- Goal kinds are now `morphism { source, target, equals? }` and `eq { prop }`, written in the label grammar and resolved against the live context
+- I-2 asked for "g ∘ f" but accepted any A→C arrow; it now requires the arrow to *equal* the composite, satisfied by labelling it, by marking the triangle, or via "compose". I-3 accepted any self-loop; it now requires the loop to be the identity
+- Goal statuses are `satisfied | pending | blocked`. **`verified` is reserved for Lean** and no longer used by the game
+- The game gained a label field for the selected player-drawn arrow, with the same status line as the editor
+
+### Behaviour changes
+
+- Deleting a morphism now also deletes morphisms defined through it (the cascade is a fixpoint, so chains go too), matching how hypotheses already behaved. Undo restores everything
+- The editor's default diagram and any saved file with a `g \circ f` label load with that arrow defined, so the startup triangle now commutes by definition
+
+### Verification
+
+- `npm run check`: 21 test files, 196 tests; `npm run build` clean
+- Browser smoke tests (Playwright against Chrome): 26 checks across editor and game, including all three routes through I-2, no console errors
+
+### Files
+
+- New: `src/math/label.ts`, `unfold.ts`, `definitions.ts`, `entail.ts`, `src/LabelStatus.jsx`, `docs/PHASE3-PLAN.md`, four new test suites
+- Changed: `math/types.ts`, `context.ts`, `print.ts`, `proof.ts`, `index.ts`; `diagram/state.ts`, `commute.ts`, `legacy.ts`, `serialize.ts`, `merge.ts`, `index.ts`; `CommChecker.jsx`, `MorphismPanel.jsx`, `App.jsx`, `game/GameMode.jsx`, `ValidationEngine.js`, `ProofLog.jsx`, `levels/world1-sets.js`
+
 ## 2026-09-04 — v0.7: Diagram state separated from mathematical state (Phase 2)
 
 ### State model

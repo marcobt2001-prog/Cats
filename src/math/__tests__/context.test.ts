@@ -178,3 +178,22 @@ describe('validateContext / validateDocument', () => {
     expect(errors.some(e => e.includes("unknown reference 'ghost'"))).toBe(true);
   });
 });
+
+describe('validateContext with definitions', () => {
+  it('reports a definition whose endpoints do not match the morphism', () => {
+    let doc = square();
+    [doc] = declareMorphism(doc, { name: 'x', source: 'A', target: 'D', definition: morphism('f') }, 'x');
+    expect(validateContext(doc.context)).toEqual([
+      "morphism 'x': definition: definition runs A → B but the morphism runs A → D",
+    ]);
+  });
+
+  it('accepts a definition that references a later declaration', () => {
+    let doc = emptyDocument();
+    [doc] = declareObject(doc, { name: 'A' }, 'A');
+    [doc] = declareObject(doc, { name: 'B' }, 'B');
+    [doc] = declareMorphism(doc, { name: 'x', source: 'A', target: 'B', definition: compose(morphism('f'), identity('B')) }, 'x');
+    [doc] = declareMorphism(doc, { name: 'f', source: 'A', target: 'B' }, 'f');
+    expect(validateContext(doc.context)).toEqual([]);
+  });
+});

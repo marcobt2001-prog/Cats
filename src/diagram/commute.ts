@@ -6,13 +6,28 @@
  * in either orientation). Marking adds the missing equations; unmarking removes
  * every equation parallel at that pair.
  */
-import type { HypothesisDecl, MorphismExpr, MorphismId, ObjectId } from '../math/types.js';
-import { declareHypothesis, removeDeclarations, objectsOf, hypothesesOf } from '../math/context.js';
-import { normalize, typeOf } from '../math/expr.js';
+import type { HypothesisDecl, HypothesisId, MorphismExpr, MorphismId, ObjectId } from '../math/types.js';
+import { declareHypothesis, removeDeclarations, objectsOf, hypothesesOf, getObject } from '../math/context.js';
+import { typeOf } from '../math/expr.js';
+import { exprKey } from '../math/unfold.js';
+import { printClassical, printProposition } from '../math/print.js';
 import { allPaths, pathExpr } from '../math/paths.js';
 import type { DiagramState } from './types.js';
 
 export interface ParallelPair { src: ObjectId; tgt: ObjectId; paths: MorphismId[][] }
+
+/** One pair of objects with several paths, described in mathematical terms for the UI. */
+export interface PairDescription {
+  src: ObjectId;
+  tgt: ObjectId;
+  srcName: string;
+  tgtName: string;
+  paths: { ids: MorphismId[]; expr: MorphismExpr; text: string }[];
+  hypotheses: { id: HypothesisId; text: string }[];
+  commutes: boolean;
+  /** Commutes with no equation of its own: the paths are equal by definition. */
+  byDefinition: boolean;
+}
 
 /** Ordered pairs of distinct objects with at least two paths, in declaration order. */
 export function parallelPairs(s: DiagramState): ParallelPair[] {
@@ -36,13 +51,14 @@ export function hypothesesAt(s: DiagramState, src: ObjectId, tgt: ObjectId): Hyp
   });
 }
 
-const key = (e: MorphismExpr): string => JSON.stringify(normalize(e));
+/** Definitions are unfolded first, so a composite arrow and the path it abbreviates share a key. */
+const key = (s: DiagramState, e: MorphismExpr): string => exprKey(s.doc.context, e);
 
 /** Union-find over the current paths, joined by the hypotheses at (src, tgt). */
 function pathClasses(s: DiagramState, src: ObjectId, tgt: ObjectId): { paths: MorphismId[][]; find: (k: string) => string } {
   const paths = allPaths(s.doc.context, src, tgt);
   const parent = new Map<string, string>();
-  for (const p of paths) { const k = key(pathExpr(src, p)); parent.set(k, k); }
+  for (const p of paths) { const k = key(s, pathExpr(src, p)); parent.set(k, k); }
   const find = (k: string): string => {
     let cur = k;
     while (parent.get(cur) !== cur) cur = parent.get(cur)!;
@@ -50,7 +66,7 @@ function pathClasses(s: DiagramState, src: ObjectId, tgt: ObjectId): { paths: Mo
   };
   const union = (a: string, b: string): void => { parent.set(find(a), find(b)); };
   for (const h of hypothesesAt(s, src, tgt)) {
-    const l = key(h.prop.left), r = key(h.prop.right);
+    const l = key(s, h.prop.left), r = key(s, h.prop.right);
     if (parent.has(l) && parent.has(r)) union(l, r);
   }
   return { paths, find };
@@ -59,8 +75,8 @@ function pathClasses(s: DiagramState, src: ObjectId, tgt: ObjectId): { paths: Mo
 export function isCommuting(s: DiagramState, src: ObjectId, tgt: ObjectId): boolean {
   const { paths, find } = pathClasses(s, src, tgt);
   if (paths.length < 2) return false;
-  const root = find(key(pathExpr(src, paths[0]!)));
-  return paths.every(p => find(key(pathExpr(src, p))) === root);
+  const root = find(key(s, pathExpr(src, paths[0]!)));
+  return paths.every(p => find(key(s, pathExpr(src, p))) === root);
 }
 
 /** Adds `p0 = pi` for every path not already identified with the first one. */
@@ -68,11 +84,11 @@ export function markCommuting(s: DiagramState, src: ObjectId, tgt: ObjectId): Di
   const { paths, find } = pathClasses(s, src, tgt);
   if (paths.length < 2) return s;
   const first = pathExpr(src, paths[0]!);
-  const root = find(key(first));
+  const root = find(key(s, first));
   let doc = s.doc;
   for (const p of paths.slice(1)) {
     const other = pathExpr(src, p);
-    if (find(key(other)) === root) continue;
+    if (find(key(s, other)) === root) continue;
     [doc] = declareHypothesis(doc, { prop: { kind: 'eq', left: first, right: other } });
   }
   return doc === s.doc ? s : { ...s, doc };
@@ -91,6 +107,35 @@ export function toggleCommuting(s: DiagramState, src: ObjectId, tgt: ObjectId): 
 function collectMorphisms(e: MorphismExpr, out: Set<MorphismId>): void {
   if (e.kind === 'morphism') out.add(e.ref);
   else if (e.kind === 'compose') e.factors.forEach(f => collectMorphisms(f, out));
+}
+
+/**
+ * Every parallel pair with its paths as expressions and its equations as text,
+ * ready for the commutativity panel. The UI does no mathematics of its own.
+ */
+export function describePairs(s: DiagramState): PairDescription[] {
+  const ctx = s.doc.context;
+  const name = (id: ObjectId): string => getObject(ctx, id)?.name ?? id;
+  return parallelPairs(s).map(({ src, tgt, paths }) => {
+    const hypotheses = hypothesesAt(s, src, tgt).map(h => ({
+      id: h.id,
+      text: printProposition(ctx, h.prop, 'classical'),
+    }));
+    const commutes = isCommuting(s, src, tgt);
+    return {
+      src,
+      tgt,
+      srcName: name(src),
+      tgtName: name(tgt),
+      paths: paths.map(ids => {
+        const expr = pathExpr(src, ids);
+        return { ids, expr, text: printClassical(ctx, expr) };
+      }),
+      hypotheses,
+      commutes,
+      byDefinition: commutes && hypotheses.length === 0,
+    };
+  });
 }
 
 /** Morphisms that appear in any hypothesis. Used for the teal highlight. */

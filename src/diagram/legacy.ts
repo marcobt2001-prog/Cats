@@ -7,6 +7,7 @@
  * this module only adds the layout and honours the old per-edge flags.
  */
 import { emptyDocument } from '../math/context.js';
+import { inferDefinitions } from '../math/definitions.js';
 import { fromDiagram } from '../math/fromDiagram.js';
 import type { CommGroups, VisualEdge, VisualNode } from '../math/fromDiagram.js';
 import { allPaths } from '../math/paths.js';
@@ -53,7 +54,8 @@ export function fromLegacyDiagram(nodes: LegacyNode[], edges: LegacyEdge[], comm
   const groups: CommGroups = { ...groupsFromFlags(nodes, edges, warnings), ...commGroups };
   const { context, warnings: mathWarnings } = fromDiagram(nodes, edges, groups);
   warnings.push(...mathWarnings);
-  const doc = { ...emptyDocument(), context };
+  // A label like `g \circ f` is a definition, not just decoration.
+  const doc = inferDefinitions({ ...emptyDocument(), context });
 
   const layout: Layout = { nodes: {}, edges: {} };
   const objectIds = new Set(context.declarations.filter(d => d.kind === 'object').map(d => d.id));

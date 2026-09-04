@@ -1,18 +1,17 @@
 import { st } from './styles.js';
 
 /**
- * Lists every pair of objects joined by two or more paths and lets the user
- * assert that the paths are equal. Purely presentational: `pairs` comes from
- * `parallelPairs(state)`, `isCommuting(src, tgt)` and `onToggle(src, tgt)`
- * from the owner.
+ * Lists every pair of objects joined by two or more paths, shows the morphism
+ * expression each path denotes, and lets the user assert that they are equal.
+ *
+ * Purely presentational: `pairs` comes from `describePairs(state)`, which has
+ * already done the mathematics (path expressions, equations, whether the pair
+ * commutes and whether it does so by definition).
  */
-export default function CommChecker({ nodes, edges, pairs, isCommuting, onToggle, onClose }) {
-  const nodeLabel = id => nodes.find(n => n.id === id)?.label ?? id;
-  const edgeLabel = id => edges.find(e => e.id === id)?.label || '—';
-
+export default function CommChecker({ pairs, onToggle, onCompose, onClose }) {
   return (
     <div style={{
-      position: 'absolute', top: 52, right: 248, width: 320,
+      position: 'absolute', top: 52, right: 248, width: 340,
       background: '#0c1220', border: '1px solid #1a2540',
       borderRadius: 6, zIndex: 100, boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
       display: 'flex', flexDirection: 'column', maxHeight: 'calc(100vh - 80px)',
@@ -31,42 +30,63 @@ export default function CommChecker({ nodes, edges, pairs, isCommuting, onToggle
         {pairs.length === 0 && (
           <div style={st.empty}>No parallel paths found.<br/>Add more morphisms to check commutativity.</div>
         )}
-        {pairs.map(({ src, tgt, paths }) => {
-          const active = isCommuting(src, tgt);
+        {pairs.map(pair => {
+          const { src, tgt, srcName, tgtName, paths, hypotheses, commutes, byDefinition } = pair;
           return (
             <div key={`${src}|${tgt}`} style={{
               padding: '10px 14px', borderBottom: '1px solid #111928',
-              background: active ? '#0a1e18' : 'transparent',
+              background: commutes ? '#0a1e18' : 'transparent',
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <span style={{ color: active ? '#6ee7b7' : '#c8d3ea', fontFamily: "'Crimson Text', serif",
+                <span style={{ color: commutes ? '#6ee7b7' : '#c8d3ea', fontFamily: "'Crimson Text', serif",
                   fontStyle: 'italic', fontSize: 15 }}>
-                  {nodeLabel(src)} → {nodeLabel(tgt)}
+                  {srcName} → {tgtName}
                 </span>
-                <button onClick={() => onToggle(src, tgt)}
+                <button onClick={() => !byDefinition && onToggle(src, tgt)}
+                  disabled={byDefinition}
+                  title={byDefinition ? 'These paths are equal by definition; there is nothing to assert.' : undefined}
                   style={{
                     padding: '3px 10px', fontSize: 10, fontFamily: 'monospace',
-                    background: active ? '#1a4a38' : '#162038',
-                    color: active ? '#6ee7b7' : '#4db8ff',
-                    border: `1px solid ${active ? '#2a7a60' : '#1e3256'}`,
-                    borderRadius: 3, cursor: 'pointer',
+                    background: commutes ? '#1a4a38' : '#162038',
+                    color: commutes ? '#6ee7b7' : '#4db8ff',
+                    border: `1px solid ${commutes ? '#2a7a60' : '#1e3256'}`,
+                    borderRadius: 3, cursor: byDefinition ? 'default' : 'pointer',
+                    opacity: byDefinition ? 0.75 : 1,
                   }}>
-                  {active ? '✓ commutes' : 'mark'}
+                  {byDefinition ? '✓ by definition' : commutes ? '✓ commutes' : 'mark'}
                 </button>
               </div>
+
               {paths.map((p, i) => (
-                <div key={i} style={{ color: '#3d5a8a', fontSize: 11, fontFamily: 'monospace',
-                  paddingLeft: 8, marginBottom: 2 }}>
-                  path {i + 1}: {(p.length === 0 ? ['id'] : p).map((id, j) => (
-                    <span key={j}>
-                      <span style={{ color: '#5a82c8', fontFamily: "'Crimson Text', serif", fontStyle: 'italic' }}>
-                        {p.length === 0 ? 'id' : edgeLabel(id)}
-                      </span>
-                      {j < p.length - 1 && <span style={{ color: '#2d4070' }}> ∘ </span>}
-                    </span>
-                  ))}
+                <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: 6,
+                  color: '#3d5a8a', fontSize: 11, fontFamily: 'monospace', paddingLeft: 8, marginBottom: 2 }}>
+                  <span>path {i + 1}:</span>
+                  <span style={{ color: '#5a82c8', fontFamily: "'Crimson Text', serif", fontStyle: 'italic',
+                    fontSize: 13, flex: 1 }}>
+                    {p.text}
+                  </span>
+                  {onCompose && p.ids.length >= 2 && (
+                    <button onClick={() => onCompose(src, tgt, p.expr)}
+                      title="Add an arrow defined as this composite"
+                      style={{ padding: '1px 6px', fontSize: 9, fontFamily: 'monospace',
+                        background: '#162038', color: '#4db8ff', border: '1px solid #1e3256',
+                        borderRadius: 3, cursor: 'pointer' }}>
+                      compose
+                    </button>
+                  )}
                 </div>
               ))}
+
+              {hypotheses.length > 0 && (
+                <div style={{ marginTop: 6, paddingLeft: 8 }}>
+                  {hypotheses.map(h => (
+                    <div key={h.id} style={{ color: '#6ee7b7', fontSize: 11,
+                      fontFamily: "'Crimson Text', serif", fontStyle: 'italic', lineHeight: 1.6 }}>
+                      {h.text}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}

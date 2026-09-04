@@ -1,8 +1,10 @@
 import type { GoalId, GoalStatus, MathDocument, ProofGoal, ProofStep, Proposition, StepId } from './types.js';
 import { MathError, freshId, propositionError, usedIds } from './context.js';
 import { exprEquivalent } from './expr.js';
+import { entailment } from './entail.js';
 
 export const STEP_REFL_NORMALIZE = 'refl-normalize';
+export const STEP_ENTAIL = 'entail';
 
 export function getGoal(doc: MathDocument, id: GoalId): ProofGoal | undefined {
   return doc.goals.find(g => g.id === id);
@@ -46,5 +48,20 @@ export function tryCloseByNormalization(doc: MathDocument, goalId: GoalId): { do
   if (goal.status.kind !== 'open') return { doc, closed: false };
   if (!exprEquivalent(goal.prop.left, goal.prop.right)) return { doc, closed: false };
   const [withStep, stepId] = addStep(doc, { kind: STEP_REFL_NORMALIZE, inputs: [goalId], outputs: [] });
+  return { doc: setGoalStatus(withStep, goalId, { kind: 'believed', by: stepId }), closed: true };
+}
+
+/**
+ * The same, but using definitions and the equality hypotheses in the context.
+ * Records which hypotheses were used as the step's inputs. Still only
+ * `believed`: see the limitation documented in entail.ts.
+ */
+export function tryCloseByEntailment(doc: MathDocument, goalId: GoalId): { doc: MathDocument; closed: boolean } {
+  const goal = getGoal(doc, goalId);
+  if (!goal) throw new MathError(`unknown goal '${goalId}'`);
+  if (goal.status.kind !== 'open') return { doc, closed: false };
+  const result = entailment(doc.context, goal.prop);
+  if (!result.holds) return { doc, closed: false };
+  const [withStep, stepId] = addStep(doc, { kind: STEP_ENTAIL, inputs: [goalId, ...result.by], outputs: [] });
   return { doc: setGoalStatus(withStep, goalId, { kind: 'believed', by: stepId }), closed: true };
 }

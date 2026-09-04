@@ -81,9 +81,9 @@ generation, no execution, and no Lean toolchain in the repo.
    file changed). See below.
 2. **Phase 2, done: separate diagram state from mathematical state.** See the
    Phase 2 section at the end.
-3. **Phase 3: semantic diagram interpretation.** `CommChecker` and
-   `ValidationEngine` consume propositions and `propEquivalent`; level goals
-   become explicit equalities; parse or retire `g \circ f` labels.
+3. **Phase 3, done: semantic diagram interpretation.** Labels are parsed into
+   definitions, equality is decided by `entails`, level goals are propositions.
+   See the Phase 3 section at the end.
 4. **Phase 4: Lean loop.** Local `lake`/`lean` runner, generator from
    `MathDocument`, result parser. Only this layer produces `verified`.
 5. **Later:** constructions as real mathematical state, universal properties,
@@ -165,3 +165,53 @@ Design decisions:
   fresh ids and reloading a file cannot collide.
 - **Undo snapshots document and layout together**, so un-marking and re-marking
   commutativity are undoable and ids are restored on undo.
+
+## Phase 3: semantic diagram interpretation (`src/math/label.ts`, `unfold.ts`, `definitions.ts`, `entail.ts`)
+
+Phase 2 stored the mathematics but could not read it: `g \circ f` was a string,
+and "commutes" meant "the paths are joined by a hypothesis". Phase 3 makes a
+label mean something and makes one function decide every equality question.
+
+| File | Responsibility |
+|---|---|
+| `math/label.ts` | The label grammar: `parseLabel` (text → AST), `resolveLabel` (names → ids, type-checked), `parsePropositionText` (`lhs = rhs`). |
+| `math/unfold.ts` | `unfold` (expand definitions), `exprKey`, `exprEquivalentIn`, `definitionError`, `dependentsOf`. Imports only `expr.ts`, so `context.ts` can validate definitions. |
+| `math/definitions.ts` | `setMorphismDefinition`, and the label bridge: `labelStatus`, `syncDefinition`, `inferDefinitions`, `reprintDependents`. |
+| `math/entail.ts` | `entailment` / `entails`: what the context already forces, and which hypotheses it used. |
+| `diagram/commute.ts` | `describePairs`: paths as expressions and equations as text, for the panel. |
+
+Design decisions:
+
+- **A morphism may have a `definition`.** `MorphismDecl.definition` says the
+  morphism abbreviates an expression and is equal to it *by definition*. It must
+  be parallel to the morphism and acyclic, but **may reference later
+  declarations**: an arrow is normally drawn before it is labelled.
+  `validateContext` therefore checks definitions against the whole context, in a
+  pass of its own.
+- **The label is the definition's source; the definition is the truth.** A label
+  that parses as a composite or an identity and resolves becomes the definition
+  (`syncDefinition`); a plain name clears it. Renaming a factor re-prints every
+  dependent label through `printLatex` (`reprintDependents`), so the picture and
+  the mathematics cannot drift apart. Importing uses `inferDefinitions`, which
+  only *adds*, so a stored definition is never lost because its label stopped
+  resolving.
+- **Deleting a factor deletes what was defined from it.** The cascade in
+  `removeDeclarations` is a fixpoint loop, since a definition may rest on another
+  defined morphism. Consistent with hypotheses, and undoable.
+- **One notion of equality.** `exprKey` = normalize ∘ unfold, so a composite
+  arrow and the path it abbreviates share a key. `entailment` runs a BFS over
+  those keys joined by the parallel hypotheses and reports the hypotheses used.
+  `isCommuting` and the level goals both go through it, so a pair can commute
+  *by definition*, with no equation at all: the panel says so and disables the
+  toggle, since there is nothing left to assert.
+- **No congruence.** `h ∘ f = k ∘ g` does not entail `h ∘ f ∘ x = k ∘ g ∘ x`.
+  Rewriting under a composition is Lean's job (Phase 4); this is why CATS'
+  own reasoning is still only `believed`.
+- **Level goals are propositions**, written in the label grammar and resolved
+  against the live context: `morphism { source, target, equals? }` and
+  `eq { prop }`. I-2 is satisfied by labelling the arrow `g \circ f` *or* by
+  asserting the equation in the panel, because both are the same mathematics.
+  Goal statuses are `satisfied | pending | blocked`; **`verified` stays reserved
+  for Lean**.
+- **The game gained one affordance**: a label field for the selected
+  player-drawn arrow, with the same status line the editor shows.

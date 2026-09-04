@@ -31,13 +31,31 @@ export type { IdPrefix } from './context.js';
 export { allPaths, pathExpr } from './paths.js';
 
 export {
-  getGoal, addGoal, addStep, setGoalStatus, tryCloseByNormalization, STEP_REFL_NORMALIZE,
+  unfold, definitionError, exprKey, exprEquivalentIn, propEquivalentIn, dependentsOf,
+} from './unfold.js';
+
+export {
+  setMorphismDefinition, labelStatus, syncDefinition, inferDefinitions, reprintDependents,
+} from './definitions.js';
+export type { LabelStatus } from './definitions.js';
+
+export { entailment, entails } from './entail.js';
+export type { Entailment } from './entail.js';
+
+export {
+  getGoal, addGoal, addStep, setGoalStatus,
+  tryCloseByNormalization, tryCloseByEntailment, STEP_REFL_NORMALIZE, STEP_ENTAIL,
 } from './proof.js';
 
 export {
-  printExpr, printDiagrammatic, printClassical, printProposition, printDecl,
+  printExpr, printDiagrammatic, printClassical, printLatex, printProposition, printDecl,
 } from './print.js';
 export type { PrintStyle } from './print.js';
+
+export {
+  nameKey, parseLabel, isPlainName, resolveLabel, resolveLabelText, parsePropositionText,
+} from './label.js';
+export type { LabelAst, ParseResult, ResolveResult, ResolveOptions } from './label.js';
 
 export { FORMAT_NAME, FORMAT_VERSION, serializeDocument, deserializeDocument } from './serialize.js';
 

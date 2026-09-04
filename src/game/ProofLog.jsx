@@ -29,6 +29,8 @@ export default function ProofLog({ given = [], inventory = [], steps = [] }) {
 
   const statusColor = {
     pending: '#3d5a8a',
+    // `satisfied` is CATS' own reasoning; `verified` is reserved for Lean (Phase 4).
+    satisfied: '#6ee7b7',
     verified: '#6ee7b7',
     rejected: '#ef4444',
     blocked: '#1e3256',
@@ -36,6 +38,7 @@ export default function ProofLog({ given = [], inventory = [], steps = [] }) {
 
   const statusIcon = {
     pending: '○',
+    satisfied: '✓',
     verified: '✓',
     rejected: '✗',
     blocked: '🔒',

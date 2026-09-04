@@ -1,7 +1,8 @@
 import { TYPE_OPTIONS } from './defs.jsx';
 import { st } from './styles.js';
+import LabelStatus from './LabelStatus.jsx';
 
-export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, onRename, onSetType, onSetCurve }) {
+export default function MorphismPanel({ edges, nodes, sel, ctx, labelStatusOf, onSelect, onDelete, onRename, onSetType, onSetCurve }) {
   const nodeLabel = id => nodes.find(n => n.id === id)?.label ?? '?';
 
   return (
@@ -31,9 +32,7 @@ export default function MorphismPanel({ edges, nodes, sel, onSelect, onDelete, o
                   <Row label="label">
                     <input value={e.label} onChange={ev => onRename(e.id, ev.target.value)}
                       placeholder="f" style={st.input} />
-                    <span style={{ color: '#3d5a8a', fontSize: 10, fontFamily: 'monospace', marginTop: 2 }}>
-                      LaTeX ok
-                    </span>
+                    <LabelStatus status={labelStatusOf?.(e.id)} ctx={ctx} />
                   </Row>
 
                   <Row label="type">

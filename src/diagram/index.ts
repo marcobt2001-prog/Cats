@@ -12,9 +12,10 @@ export {
 } from './state.js';
 
 export {
-  parallelPairs, hypothesesAt, isCommuting, markCommuting, unmarkCommuting, toggleCommuting, commutingEdgeIds,
+  parallelPairs, hypothesesAt, isCommuting, markCommuting, unmarkCommuting, toggleCommuting,
+  commutingEdgeIds, describePairs,
 } from './commute.js';
-export type { ParallelPair } from './commute.js';
+export type { ParallelPair, PairDescription } from './commute.js';
 
 export { toViews } from './views.js';
 

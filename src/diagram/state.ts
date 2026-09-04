@@ -4,6 +4,7 @@ import {
   setMorphismProperties, getMorphism, objectsOf, morphismsOf, validateContext, MathError,
 } from '../math/context.js';
 import { PROPERTY_TYPES } from '../math/fromDiagram.js';
+import { syncDefinition, reprintDependents } from '../math/definitions.js';
 import type { ArrowStyle, DiagramState, Layout, NodeLayout } from './types.js';
 import { isDecoration } from './types.js';
 
@@ -33,17 +34,25 @@ export function addMorphism(
   m: { src: ObjectId; tgt: ObjectId; name?: string; style?: ArrowStyle },
 ): [DiagramState, MorphismId] {
   const { properties, decoration } = splitStyle(m.style ?? 'morphism');
-  const [doc, id] = declareMorphism(s.doc, { name: m.name ?? '', source: m.src, target: m.tgt, properties });
+  let [doc, id] = declareMorphism(s.doc, { name: m.name ?? '', source: m.src, target: m.tgt, properties });
+  doc = syncDefinition(doc, id);
   const edge = decoration ? { curve: 0, decoration } : { curve: 0 };
   return [{ doc, layout: { ...s.layout, edges: { ...s.layout.edges, [id]: edge } } }, id];
 }
 
+/** Renaming an object re-prints the labels of identities on it. */
 export function renameObject(s: DiagramState, id: ObjectId, name: string): DiagramState {
-  return { ...s, doc: renameDeclaration(s.doc, id, name) };
+  const doc = reprintDependents(renameDeclaration(s.doc, id, name), id);
+  return { ...s, doc };
 }
 
+/**
+ * Renaming a morphism re-reads its label as a definition, then re-prints every
+ * composite defined through it. One state change, so one undo entry.
+ */
 export function renameMorphism(s: DiagramState, id: MorphismId, name: string): DiagramState {
-  return { ...s, doc: renameDeclaration(s.doc, id, name) };
+  const doc = reprintDependents(syncDefinition(renameDeclaration(s.doc, id, name), id), id);
+  return { ...s, doc };
 }
 
 /** Derived UI style: a mathematical property wins, then a visual decoration, then plain. */

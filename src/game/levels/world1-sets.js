@@ -25,9 +25,9 @@ export const WORLD1_LEVELS = [
     goals: [
       {
         id: 'g1',
-        type: 'draw_morphism',
-        src: 'A',
-        tgt: 'B',
+        type: 'morphism',
+        source: 'A',
+        target: 'B',
         description: 'Draw a morphism f : A \\to B',
       },
     ],
@@ -76,16 +76,18 @@ variable (f : A ⟶ B)`,
     goals: [
       {
         id: 'g1',
-        type: 'draw_morphism',
-        src: 'A',
-        tgt: 'C',
-        description: 'Draw g\\circ f : A \\to C',
+        type: 'morphism',
+        source: 'A',
+        target: 'C',
+        description: 'Draw a morphism A \\to C',
       },
       {
         id: 'g2',
-        type: 'mark_commutative',
-        nodes: ['A', 'B', 'C'],
-        description: 'Mark the triangle as commutative',
+        type: 'morphism',
+        source: 'A',
+        target: 'C',
+        equals: 'g \\circ f',
+        description: 'Make it the composite g \\circ f',
         dependsOn: 'g1',
       },
     ],
@@ -104,7 +106,8 @@ def gf : A ⟶ D := g ∘ f
 example : g ∘ f = gf f g := rfl`,
 
     hints: [
-      'The composite of f followed by g goes directly from A to C.',
+      'Draw A → C, then select it and type the label "g \\circ f". ' +
+      'Or leave it unnamed and mark the pair A → C in "∘ Commutes" to assert that both routes are equal.',
     ],
   },
 
@@ -132,10 +135,11 @@ example : g ∘ f = gf f g := rfl`,
     goals: [
       {
         id: 'g1',
-        type: 'draw_morphism',
-        src: 'A',
-        tgt: 'A',
-        description: 'Draw \\mathrm{id}_A : A \\to A',
+        type: 'morphism',
+        source: 'A',
+        target: 'A',
+        equals: '\\mathrm{id}_A',
+        description: 'Draw and label \\mathrm{id}_A : A \\to A',
       },
     ],
 
@@ -152,7 +156,8 @@ def idA : A ⟶ A := 𝟙 A
 example {B : C} (f : A ⟶ B) : 𝟙 A ≫ f = f := Category.id_comp f`,
 
     hints: [
-      'A self-loop! Use "→ Draw" mode: click A, then click A again.',
+      'A self-loop: in "→ Draw" mode click A, then click A again. ' +
+      'Then select it and label it "\\mathrm{id}_A" (id_A and 1_A also work) so it really is the identity.',
     ],
   },
 
@@ -191,9 +196,9 @@ example {B : C} (f : A ⟶ B) : 𝟙 A ≫ f = f := Category.id_comp f`,
     goals: [
       {
         id: 'g1',
-        type: 'mark_commutative',
-        nodes: ['A', 'B', 'C', 'D'],
-        description: 'Mark the square as commutative (h \\circ f = k \\circ g)',
+        type: 'eq',
+        prop: 'h \\circ f = k \\circ g',
+        description: 'Assert that the square commutes: h \\circ f = k \\circ g',
       },
     ],
 

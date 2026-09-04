@@ -1,8 +1,9 @@
 import type {
   Declaration, HypothesisDecl, HypothesisId, LeanReference, MathContext, MathDocument,
-  MorphismDecl, MorphismId, MorphismProperty, ObjectDecl, ObjectId, Proposition,
+  MorphismDecl, MorphismExpr, MorphismId, MorphismProperty, ObjectDecl, ObjectId, Proposition,
 } from './types.js';
 import { MathError, mentions, typeOf } from './expr.js';
+import { definitionError } from './unfold.js';
 
 export { MathError };
 
@@ -14,9 +15,19 @@ export { MathError };
  */
 export function removeDeclarations(doc: MathDocument, ids: Iterable<string>): MathDocument {
   const gone = new Set(ids);
-  // Cascade objects → their morphisms.
-  for (const d of doc.context.declarations) {
-    if (d.kind === 'morphism' && (gone.has(d.source) || gone.has(d.target))) gone.add(d.id);
+  // Cascade objects → their morphisms, and definitions → the morphisms defined
+  // through them. A definition may depend on another defined morphism, so iterate
+  // to a fixpoint.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const d of doc.context.declarations) {
+      if (d.kind !== 'morphism' || gone.has(d.id)) continue;
+      if (gone.has(d.source) || gone.has(d.target) || (d.definition !== undefined && mentions(d.definition, gone))) {
+        gone.add(d.id);
+        changed = true;
+      }
+    }
   }
   const declarations = doc.context.declarations.filter(d => {
     if (gone.has(d.id)) return false;
@@ -105,7 +116,10 @@ export function declareObject(
 
 export function declareMorphism(
   doc: MathDocument,
-  d: { name: string; source: ObjectId; target: ObjectId; properties?: MorphismProperty[]; lean?: LeanReference },
+  d: {
+    name: string; source: ObjectId; target: ObjectId;
+    properties?: MorphismProperty[]; definition?: MorphismExpr; lean?: LeanReference;
+  },
   id?: MorphismId,
 ): [MathDocument, MorphismId] {
   if (!getObject(doc.context, d.source)) throw new MathError(`unknown source object '${d.source}'`);
@@ -114,9 +128,12 @@ export function declareMorphism(
   let mid = id;
   if (mid === undefined) [next, mid] = freshId(next, 'm');
   else assertUnused(next, mid);
+  // The definition is not checked here: it may reference later declarations.
+  // `validateContext` checks it against the whole context.
   const decl: MorphismDecl = {
     kind: 'morphism', id: mid, name: d.name, source: d.source, target: d.target,
     ...(d.properties && d.properties.length > 0 ? { properties: [...d.properties] } : {}),
+    ...(d.definition ? { definition: d.definition } : {}),
     ...(d.lean ? { lean: d.lean } : {}),
   };
   return [withDecl(next, decl), mid];
@@ -204,6 +221,13 @@ export function validateContext(ctx: MathContext): string[] {
       }
     }
     soFar.declarations.push(d);
+  }
+  // Definitions may reference later declarations, so they are checked against
+  // the whole context: well-typed, parallel to their morphism, acyclic.
+  for (const d of ctx.declarations) {
+    if (d.kind !== 'morphism' || d.definition === undefined) continue;
+    const err = definitionError(ctx, d.id, d.definition);
+    if (err) errors.push(`morphism '${d.id}': definition: ${err}`);
   }
   return errors;
 }

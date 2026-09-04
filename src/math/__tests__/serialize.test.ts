@@ -11,6 +11,7 @@ function richDocument() {
   [doc] = declareMorphism(doc, { name: 'g', source: 'A', target: 'C' }, 'g');
   [doc] = declareMorphism(doc, { name: 'h', source: 'B', target: 'D', lean: { kind: 'const', name: 'Prod.fst' } }, 'h');
   [doc] = declareMorphism(doc, { name: 'k', source: 'C', target: 'D' }, 'k');
+  [doc] = declareMorphism(doc, { name: 'h \\circ f', source: 'A', target: 'D', definition: compose(morphism('f'), morphism('h')) }, 'hf');
   const f = morphism('f'), g = morphism('g'), h = morphism('h'), k = morphism('k');
   [doc] = declareHypothesis(doc, { name: 'sq', prop: { kind: 'eq', left: compose(f, h), right: compose(g, k) } });
   let g1: string, g3: string, g4: string, s1: string;
@@ -64,5 +65,20 @@ describe('serialize / deserialize', () => {
     const raw = JSON.parse(serializeDocument(doc));
     raw.context.declarations = raw.context.declarations.filter((d: { id: string }) => d.id !== 'k');
     expect(() => deserializeDocument(JSON.stringify(raw))).toThrow(/invalid document/);
+  });
+});
+
+describe('serialize with definitions', () => {
+  it('keeps a definition through a round-trip', () => {
+    const back = deserializeDocument(serializeDocument(richDocument()));
+    const hf = back.context.declarations.find(d => d.id === 'hf');
+    expect(hf && hf.kind === 'morphism' ? hf.definition : undefined).toEqual(compose(morphism('f'), morphism('h')));
+  });
+
+  it('rejects a file with a circular definition', () => {
+    const raw = JSON.parse(serializeDocument(richDocument()));
+    raw.context.declarations = raw.context.declarations.map((d: { id: string }) =>
+      d.id === 'hf' ? { ...d, definition: { kind: 'morphism', ref: 'hf' } } : d);
+    expect(() => deserializeDocument(JSON.stringify(raw))).toThrow(/circular/);
   });
 });

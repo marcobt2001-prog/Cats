@@ -3,9 +3,12 @@ import Canvas from '../Canvas.jsx';
 import CommChecker from '../CommChecker.jsx';
 import { useSelection } from '../useSelection.js';
 import {
-  addObject, addMorphism, moveNodes as moveNodesOp, setCurve as setCurveOp, deleteElements as deleteElementsOp,
-  parallelPairs, isCommuting, toggleCommuting, commutingEdgeIds,
+  addObject, addMorphism, renameMorphism, moveNodes as moveNodesOp, setCurve as setCurveOp,
+  deleteElements as deleteElementsOp,
+  describePairs, toggleCommuting, commutingEdgeIds,
 } from '../diagram/index.ts';
+import { labelStatus, printLatex } from '../math/index.ts';
+import LabelStatus from '../LabelStatus.jsx';
 import { st } from '../styles.js';
 import CollapsiblePanel from '../panels/CollapsiblePanel.jsx';
 import ProofLog from './ProofLog.jsx';
@@ -47,7 +50,7 @@ function GameCanvas({ lv, onBackToSelect }) {
   const nodeById = id => nodes.find(n => n.id === id);
 
   const commEdgeIds = useMemo(() => commutingEdgeIds(state), [state]);
-  const pairs = useMemo(() => parallelPairs(state), [state]);
+  const pairs = useMemo(() => describePairs(state), [state]);
 
   // Validation
   const { updatedSteps, levelComplete } = useMemo(
@@ -99,6 +102,20 @@ function GameCanvas({ lv, onBackToSelect }) {
 
   const togglePair = (src, tgt) => apply(s => toggleCommuting(s, src, tgt));
 
+  const composePath = (src, tgt, expr) => {
+    const cur = getState();
+    const [next, id] = addMorphism(cur, { src, tgt, name: printLatex(cur.doc.context, expr) });
+    apply(next);
+    selection.selectOne('edge', id);
+  };
+
+  // The selected player-drawn arrow, if any: the game's one label affordance.
+  const selEdge = sel?.type === 'edge' && !lockedEdgeIds.has(sel.id)
+    ? edges.find(e => e.id === sel.id)
+    : undefined;
+  const renameEdge = (id, name) =>
+    apply(s => renameMorphism(s, id, name), { coalesceKey: `label:${id}` });
+
   const handleReset = () => {
     reset();
     clear();
@@ -116,6 +133,7 @@ function GameCanvas({ lv, onBackToSelect }) {
   const status =
     mode === 'addNode' ? 'Click to place object  ·  Esc' :
     mode === 'addEdge' ? (drawSrc ? `Source: ${nodeById(drawSrc)?.label}  ·  click target` : 'Click source  ·  Esc') :
+    selEdge ? 'Type a label: a name, or a composite like g \\circ f' :
     sel ? 'Selected  ·  Del to remove  ·  ∘ Commutes to assert equations' :
     'Select · 1/2/3 modes · ∘ Commutes · Del remove';
 
@@ -177,6 +195,22 @@ function GameCanvas({ lv, onBackToSelect }) {
             ∘ Commutes
           </button>
 
+          {/* Label editor for the selected player-drawn arrow. Inline on purpose:
+              an inner component would be a new type each render and lose focus. */}
+          {selEdge && (
+            <>
+              <div style={{ width: 1, height: 16, background: '#1a2540', margin: '0 2px' }} />
+              <span style={{ color: '#1e3256', fontSize: 9, letterSpacing: '0.12em' }}>LABEL</span>
+              <input
+                value={selEdge.label}
+                onChange={ev => renameEdge(selEdge.id, ev.target.value)}
+                placeholder="f"
+                style={{ ...st.input, width: 130 }}
+              />
+              <LabelStatus status={labelStatus(state.doc.context, selEdge.id)} ctx={state.doc.context} />
+            </>
+          )}
+
           <div style={{ flex: 1 }} />
           <span style={{ color: '#1e3256', fontSize: 9, letterSpacing: '0.04em', lineHeight: 1.6 }}>
             {status}
@@ -192,8 +226,8 @@ function GameCanvas({ lv, onBackToSelect }) {
           onCreateNode={createNode} onCreateEdge={createEdge}
           onMoveNodes={moveNodes} onSetCurve={setCurve} onDelete={deleteElements} />
 
-        {showComm && <CommChecker nodes={nodes} edges={edges}
-          pairs={pairs} isCommuting={(src, tgt) => isCommuting(state, src, tgt)} onToggle={togglePair}
+        {showComm && <CommChecker
+          pairs={pairs} onToggle={togglePair} onCompose={composePath}
           onClose={() => setShowComm(false)} />}
 
         {/* Hint bar */}

@@ -5,10 +5,10 @@ import { useDiagramHistory } from './useDiagramHistory.js';
 import {
   fromLegacyDiagram, addObject, addMorphism, renameObject, renameMorphism, setMorphismStyle,
   moveNodes as moveNodesOp, setCurve as setCurveOp, deleteElements as deleteElementsOp,
-  parallelPairs, isCommuting, toggleCommuting, commutingEdgeIds,
+  describePairs, toggleCommuting, commutingEdgeIds,
   extractSubdiagram, mergeDiagram,
 } from './diagram/index.ts';
-import { objectsOf, morphismsOf } from './math/index.ts';
+import { objectsOf, morphismsOf, labelStatus, printLatex } from './math/index.ts';
 import { DEFAULT_NODES, DEFAULT_EDGES } from './defaults.js';
 import ObjectPanel from './ObjectPanel.jsx';
 import MorphismPanel from './MorphismPanel.jsx';
@@ -109,7 +109,7 @@ function Editor() {
   const nodeById = id => nodes.find(n => n.id === id);
 
   const commEdgeIds = useMemo(() => commutingEdgeIds(state), [state]);
-  const pairs = useMemo(() => parallelPairs(state), [state]);
+  const pairs = useMemo(() => describePairs(state), [state]);
 
   // ── Diagram mutators (Canvas callbacks and panel actions) ──
   const createNode = useCallback(({ x, y }) => {
@@ -133,6 +133,14 @@ function Editor() {
   const setEdgeType = (id, style) => apply(s => setMorphismStyle(s, id, style));
   const setEdgeCurveFromSlider = (id, curve) => setCurve(id, curve, { coalesceKey: `slider:${id}` });
   const togglePair = (src, tgt) => apply(s => toggleCommuting(s, src, tgt));
+
+  // "compose" in the Commutes panel: a new arrow that *is* the path it names.
+  const composePath = (src, tgt, expr) => {
+    const cur = getState();
+    const [next, id] = addMorphism(cur, { src, tgt, name: printLatex(cur.doc.context, expr) });
+    apply(next);
+    selectOne('edge', id);
+  };
 
   const deleteNode = id => { deleteElements({ nodeIds: [id] }); if (selNodeIds.has(id)) clear(); };
   const deleteEdge = id => { deleteElements({ edgeIds: [id] }); if (selEdgeIds.has(id)) clear(); };
@@ -321,8 +329,8 @@ function Editor() {
           <AlignToolbar nodes={nodes} selNodeIds={selNodeIds} onUpdateNodes={patches => moveNodes(patches)} />
         )}
 
-        {showComm && <CommChecker nodes={nodes} edges={edges}
-          pairs={pairs} isCommuting={(src, tgt) => isCommuting(state, src, tgt)} onToggle={togglePair}
+        {showComm && <CommChecker
+          pairs={pairs} onToggle={togglePair} onCompose={composePath}
           onClose={() => setShowComm(false)} />}
 
         {toast && (
@@ -336,6 +344,7 @@ function Editor() {
 
       <CollapsiblePanel side="right" label="Morphisms" defaultOpen={true}>
         <MorphismPanel edges={edges} nodes={nodes} sel={activeSel}
+          ctx={state.doc.context} labelStatusOf={id => labelStatus(state.doc.context, id)}
           onSelect={selectOne}
           onDelete={deleteEdge} onRename={renameEdge} onSetType={setEdgeType} onSetCurve={setEdgeCurveFromSlider} />
       </CollapsiblePanel>

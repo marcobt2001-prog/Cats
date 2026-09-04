@@ -58,6 +58,12 @@ export interface MorphismDecl {
   source: ObjectId;
   target: ObjectId;
   properties?: MorphismProperty[];
+  /**
+   * The morphism abbreviates this expression and equals it by definition.
+   * Must be parallel to the morphism and acyclic; it may reference declarations
+   * that come later in the context (an arrow is usually drawn before it is labelled).
+   */
+  definition?: MorphismExpr;
   lean?: LeanReference;
 }
 

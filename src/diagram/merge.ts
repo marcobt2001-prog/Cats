@@ -5,6 +5,7 @@
 import type { Declaration, MorphismExpr, MorphismId, ObjectId, Proposition } from '../math/types.js';
 import { assertNever } from '../math/types.js';
 import { emptyDocument, declareObject, declareMorphism, declareHypothesis, MathError } from '../math/context.js';
+import { setMorphismDefinition } from '../math/definitions.js';
 import type { DiagramState, Layout } from './types.js';
 
 /** Objects in `nodeIds`, morphisms in `edgeIds` whose endpoints are both kept, and hypotheses fully inside. */
@@ -36,6 +37,18 @@ export function extractSubdiagram(
       }
       default:
         assertNever(d);
+    }
+  }
+  // A definition whose factors were left behind cannot travel; the label stays
+  // and `labelStatus` will report it as unresolved in the fragment.
+  for (let i = 0; i < declarations.length; i += 1) {
+    const d = declarations[i]!;
+    if (d.kind !== 'morphism' || d.definition === undefined) continue;
+    const refs = new Set<string>();
+    collectRefs(d.definition, refs);
+    if (![...refs].every(id => kept.has(id))) {
+      const { definition: _drop, ...rest } = d;
+      declarations[i] = rest;
     }
   }
   const layout: Layout = {
@@ -99,6 +112,8 @@ export function mergeDiagram(
         const source = idMap.get(d.source), target = idMap.get(d.target);
         if (!source || !target) throw new MathError(`morphism '${d.id}' references an object outside the fragment`);
         let id: string;
+        // Definitions are applied in a second pass: they may reference
+        // morphisms further down the incoming list.
         [doc, id] = declareMorphism(doc, {
           name: d.name, source, target,
           ...(d.properties ? { properties: d.properties } : {}),
@@ -129,6 +144,12 @@ export function mergeDiagram(
       default:
         assertNever(d);
     }
+  }
+
+  for (const d of incoming.doc.context.declarations) {
+    if (d.kind !== 'morphism' || d.definition === undefined) continue;
+    const id = idMap.get(d.id);
+    if (id) doc = setMorphismDefinition(doc, id, mapExpr(d.definition, idMap));
   }
 
   return [{ doc, layout: { nodes, edges } }, { nodeIds, edgeIds }];

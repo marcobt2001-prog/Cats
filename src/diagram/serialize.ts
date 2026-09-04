@@ -6,6 +6,7 @@
  */
 import { MathError } from '../math/context.js';
 import { deserializeDocument } from '../math/serialize.js';
+import { inferDefinitions } from '../math/definitions.js';
 import { objectsOf, morphismsOf } from '../math/context.js';
 import type { DiagramState, EdgeLayout, Layout, NodeLayout } from './types.js';
 import { isDecoration } from './types.js';
@@ -60,7 +61,8 @@ export function deserializeCat(json: string): CatLoadResult {
 
   if (version !== CAT_VERSION) throw new MathError(`unsupported .cat version '${String(version)}'`);
 
-  const doc = deserializeDocument(JSON.stringify(raw['math']));
+  // Phase 2 files have labels but no definitions; read them now.
+  const doc = inferDefinitions(deserializeDocument(JSON.stringify(raw['math'])));
   const warnings: string[] = [];
   const rawLayout = isRecord(raw['layout']) ? raw['layout'] : {};
   const rawNodes = isRecord(rawLayout['nodes']) ? rawLayout['nodes'] : {};
