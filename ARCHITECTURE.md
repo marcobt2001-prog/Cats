@@ -61,9 +61,10 @@ The diagram model fuses visual and mathematical state:
 
 ### Lean layer: cosmetic before Phase 4
 
-Four hand-written `leanStub` strings live in `src/game/levels/world1-sets.js`
-and are displayed with a regex highlighter in `GameMode.jsx`. There is no
-generation, no execution, and no Lean toolchain in the repo.
+Four hand-written `leanStub` strings lived in `src/game/levels/world1-sets.js`,
+displayed with a regex highlighter in `GameMode.jsx`. There was no generation,
+no execution, and no Lean toolchain in the repo. (Phase 4 replaced them with
+generated files; three of the four would not have compiled.)
 
 ### Known debt to clear during Phase 2
 
@@ -84,8 +85,9 @@ generation, no execution, and no Lean toolchain in the repo.
 3. **Phase 3, done: semantic diagram interpretation.** Labels are parsed into
    definitions, equality is decided by `entails`, level goals are propositions.
    See the Phase 3 section at the end.
-4. **Phase 4: Lean loop.** Local `lake`/`lean` runner, generator from
-   `MathDocument`, result parser. Only this layer produces `verified`.
+4. **Phase 4, done: the Lean loop.** A generator from `MathDocument`, a local
+   `lake`/`lean` runner behind a dev-server endpoint, and a result parser. Only
+   this layer produces `verified`. See the Phase 4 section at the end.
 5. **Later:** constructions as real mathematical state, universal properties,
    typed objects (`G : Group`), notebook and problem-solver modes.
 
@@ -215,3 +217,54 @@ Design decisions:
   for Lean**.
 - **The game gained one affordance**: a label field for the selected
   player-drawn arrow, with the same status line the editor shows.
+
+## Phase 4: the Lean loop (`src/lean/`, `server/lean/`)
+
+The diagram becomes a Lean 4 / Mathlib file, a local process checks it, and the
+verdict comes back into the document. Only this path writes `verified`.
+
+`src/lean/` is pure TypeScript: it imports `src/math`, and nothing in `src/math`
+imports it, so the mathematical core stays Lean-free.
+
+| File | Responsibility |
+|---|---|
+| `names.ts` | LaTeX labels → Lean identifiers, collision-free and derived on every run. |
+| `generate.ts` | A `MathDocument` as one Mathlib section, plus a line map from goals to lines. |
+| `diagnostics.ts` | Lean's output as structured diagnostics; what counts as success. |
+| `apply.ts` | The one constructor of `verified`, the `lean-check` step, and staleness. |
+| `client.js` | The browser side of the endpoint; treats a non-JSON reply as "not available". |
+| `LeanPanel.jsx`, `LeanCode.jsx`, `useLeanCheck.js` | The shared UI. |
+
+`server/lean/` is Node, deliberately outside `src/` so no process API can reach
+the browser bundle: `runner.js` (spawn, queue, timeout, status probe, source
+guard), `vite-plugin.js` (the `apply: 'serve'` endpoint), `setup.js` (toolchain
+setup). `lean/` holds the lake project's source files; see `lean/README.md`.
+
+Design decisions:
+
+- **Only Lean says `verified`.** `applyLeanResult` is the sole constructor, and
+  only from a result a real process produced. CATS' own reasoning still stops at
+  `believed`, and the proof log shows the two verdicts in different colours.
+- **Identifiers are derived, never stored.** A rename changes the generated file,
+  which is precisely what should make an earlier check stale. The category
+  variable is `𝒞`, so an object may still be called `C` — the old hand-written
+  stubs had to rename objects to avoid exactly that collision.
+- **A defined morphism becomes a `local notation`,** so a composite arrow *is*
+  its composite and `rfl` closes it, with none of the argument bookkeeping a
+  `def` under `variable`s would need. Notations are emitted in dependency order,
+  because definitions may forward-reference.
+- **Hypotheses are binders on each `example`,** not section variables: since Lean
+  4.11 a variable used only inside a tactic block is not included in the
+  statement.
+- **One tactic, one run:** `first | rfl | (simp_all only [...]; done) | aesop_cat`.
+  No hypothesis list, so there is no rewrite direction to guess and no loop from
+  listing both. `aesop_cat` is where Lean supplies the congruence reasoning
+  `entails` deliberately refuses.
+- **Staleness is textual.** A check stores the exact source it ran; regenerating
+  and comparing catches renames, new hypotheses, and withdrawn ones alike.
+- **Local only.** The endpoint exists only while serving, so a deployed build has
+  none and the panel says so while still offering copy and download. Because it
+  compiles code it is fenced: localhost, same-origin, a custom header, a body
+  cap, and a guard that allows Mathlib imports and refuses commands.
+- **The build lives outside the repo** (`CATS_LEAN_DIR`), since this checkout is
+  inside OneDrive and a Mathlib build is hundreds of thousands of files.

@@ -27,6 +27,8 @@ import Mathlib.CategoryTheory.Category.Basic
 
 set_option autoImplicit false
 set_option linter.unusedVariables false
+set_option linter.unusedTactic false
+set_option linter.unreachableTactic false
 
 open CategoryTheory
 
@@ -50,6 +52,8 @@ import Mathlib.CategoryTheory.Category.Basic
 
 set_option autoImplicit false
 set_option linter.unusedVariables false
+set_option linter.unusedTactic false
+set_option linter.unreachableTactic false
 
 open CategoryTheory
 
@@ -93,7 +97,7 @@ describe('generateLean', () => {
   it('generates the I-4 square exactly, with its line map', () => {
     const gen = generateLean(i4());
     expect(gen.source).toBe(I4_SOURCE);
-    expect(gen.goals).toEqual([{ id: 'goal:I-4:g1', startLine: 17, line: 18, endLine: 19 }]);
+    expect(gen.goals).toEqual([{ id: 'goal:I-4:g1', startLine: 19, line: 20, endLine: 21 }]);
     // The line map points at the real lines.
     const lines = gen.source.split('\n');
     expect(lines[gen.goals[0]!.line - 1]).toMatch(/^example /);
@@ -103,7 +107,7 @@ describe('generateLean', () => {
   it('generates the defaults triangle exactly, defining the composite as a notation', () => {
     const gen = generateLean(trianglе());
     expect(gen.source).toBe(TRIANGLE_SOURCE);
-    expect(gen.goals).toEqual([{ id: 'g1', startLine: 18, line: 19, endLine: 20 }]);
+    expect(gen.goals).toEqual([{ id: 'g1', startLine: 20, line: 21, endLine: 22 }]);
   });
 
   it('says what CATS believes above each goal', () => {

@@ -94,16 +94,16 @@ async function readToolchain(dir) {
 }
 
 async function mathlibBuilt(dir) {
-  const olean = path.join(
-    dir, '.lake', 'packages', 'mathlib', '.lake', 'build', 'lib',
-    'Mathlib', 'CategoryTheory', 'Category', 'Basic.olean',
-  );
-  try {
-    await access(olean);
-    return true;
-  } catch {
-    return false;
+  const build = path.join(dir, '.lake', 'packages', 'mathlib', '.lake', 'build', 'lib');
+  const tail = path.join('Mathlib', 'CategoryTheory', 'Category', 'Basic.olean');
+  // Lake nests built oleans under `lib/lean/`; older layouts put them in `lib/`.
+  for (const candidate of [path.join(build, 'lean', tail), path.join(build, tail)]) {
+    try {
+      await access(candidate);
+      return true;
+    } catch { /* try the next layout */ }
   }
+  return false;
 }
 
 /**

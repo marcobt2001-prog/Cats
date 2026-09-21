@@ -61,6 +61,10 @@ const HEADER = [
   '',
   'set_option autoImplicit false',
   'set_option linter.unusedVariables false',
+  // The proof tries several tactics and keeps the first that works, so the
+  // alternatives it never reaches are expected, not a mistake.
+  'set_option linter.unusedTactic false',
+  'set_option linter.unreachableTactic false',
   '',
   'open CategoryTheory',
   '',

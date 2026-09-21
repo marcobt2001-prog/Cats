@@ -1,0 +1,12 @@
+name = "cats"
+defaultTargets = ["Cats"]
+
+[[require]]
+name = "mathlib"
+scope = "leanprover-community"
+# Pinned to a stable Mathlib release rather than master, so the toolchain and
+# the build are reproducible. Bump deliberately, with `lake update`.
+rev = "v4.34.0"
+
+[[lean_lib]]
+name = "Cats"
