@@ -8,7 +8,7 @@ import { st } from './styles.js';
  * already done the mathematics (path expressions, equations, whether the pair
  * commutes and whether it does so by definition).
  */
-export default function CommChecker({ pairs, onToggle, onCompose, onClose }) {
+export default function CommChecker({ pairs, onToggle, onCompose, onProve, onClose }) {
   return (
     <div style={{
       position: 'absolute', top: 52, right: 248, width: 340,
@@ -42,6 +42,17 @@ export default function CommChecker({ pairs, onToggle, onCompose, onClose }) {
                   fontStyle: 'italic', fontSize: 15 }}>
                   {srcName} → {tgtName}
                 </span>
+                {onProve && (
+                  <button onClick={() => onProve(src, tgt)}
+                    title="State this as a goal for Lean to decide"
+                    style={{
+                      padding: '3px 10px', fontSize: 10, fontFamily: 'monospace', marginRight: 6,
+                      background: '#1d1a0e', color: '#f5c542', border: '1px solid #5a4a1a',
+                      borderRadius: 3, cursor: 'pointer',
+                    }}>
+                    ⊢ prove
+                  </button>
+                )}
                 <button onClick={() => !byDefinition && onToggle(src, tgt)}
                   disabled={byDefinition}
                   title={byDefinition ? 'These paths are equal by definition; there is nothing to assert.' : undefined}

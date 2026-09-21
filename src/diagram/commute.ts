@@ -6,10 +6,11 @@
  * in either orientation). Marking adds the missing equations; unmarking removes
  * every equation parallel at that pair.
  */
-import type { HypothesisDecl, HypothesisId, MorphismExpr, MorphismId, ObjectId } from '../math/types.js';
+import type { HypothesisDecl, HypothesisId, MorphismExpr, MorphismId, ObjectId, Proposition } from '../math/types.js';
 import { declareHypothesis, removeDeclarations, objectsOf, hypothesesOf, getObject } from '../math/context.js';
 import { typeOf } from '../math/expr.js';
-import { exprKey } from '../math/unfold.js';
+import { exprKey, propEquivalentIn } from '../math/unfold.js';
+import { addGoal } from '../math/proof.js';
 import { printClassical, printProposition } from '../math/print.js';
 import { allPaths, pathExpr } from '../math/paths.js';
 import type { DiagramState } from './types.js';
@@ -146,4 +147,26 @@ export function commutingEdgeIds(s: DiagramState): Set<MorphismId> {
     collectMorphisms(h.prop.right, out);
   }
   return out;
+}
+
+/**
+ * States, as goals, that every path between a pair is the first one. This is
+ * the editor's way of asking a question rather than asserting an answer:
+ * `markCommuting` adds hypotheses (assumptions), while this adds goals for
+ * Lean to decide. A statement already present in either orientation is skipped.
+ */
+export function addPairGoals(s: DiagramState, src: ObjectId, tgt: ObjectId): DiagramState {
+  const paths = allPaths(s.doc.context, src, tgt);
+  if (paths.length < 2) return s;
+
+  const first = pathExpr(src, paths[0]!);
+  let doc = s.doc;
+  for (const path of paths.slice(1)) {
+    const prop: Proposition = { kind: 'eq', left: first, right: pathExpr(src, path) };
+    const flipped: Proposition = { kind: 'eq', left: prop.right, right: prop.left };
+    const known = doc.goals.some(g =>
+      propEquivalentIn(doc.context, g.prop, prop) || propEquivalentIn(doc.context, g.prop, flipped));
+    if (!known) [doc] = addGoal(doc, prop);
+  }
+  return doc === s.doc ? s : { ...s, doc };
 }

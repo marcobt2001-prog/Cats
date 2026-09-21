@@ -34,12 +34,6 @@ export const WORLD1_LEVELS = [
 
     awardsCard: 'MORPHISM',
 
-    leanStub: `import Mathlib.CategoryTheory.Category.Basic
-
-variable {C : Type*} [Category C] {A B : C}
-
--- A morphism from A to B
-variable (f : A ⟶ B)`,
 
     hints: [
       'Use "→ Draw" mode: click A, then click B to create a morphism.',
@@ -94,16 +88,6 @@ variable (f : A ⟶ B)`,
 
     awardsCard: 'COMPOSITION',
 
-    leanStub: `import Mathlib.CategoryTheory.Category.Basic
-
-variable {C : Type*} [Category C] {A B D : C}
-variable (f : A ⟶ B) (g : B ⟶ D)
-
--- Composition
-def gf : A ⟶ D := g ∘ f
-
--- Commutativity: the triangle commutes by definition
-example : g ∘ f = gf f g := rfl`,
 
     hints: [
       'Draw A → C, then select it and type the label "g \\circ f". ' +
@@ -145,15 +129,6 @@ example : g ∘ f = gf f g := rfl`,
 
     awardsCard: 'IDENTITY',
 
-    leanStub: `import Mathlib.CategoryTheory.Category.Basic
-
-variable {C : Type*} [Category C] {A : C}
-
--- The identity morphism
-def idA : A ⟶ A := 𝟙 A
-
--- id composed with any morphism is that morphism
-example {B : C} (f : A ⟶ B) : 𝟙 A ≫ f = f := Category.id_comp f`,
 
     hints: [
       'A self-loop: in "→ Draw" mode click A, then click A again. ' +
@@ -204,14 +179,6 @@ example {B : C} (f : A ⟶ B) : 𝟙 A ≫ f = f := Category.id_comp f`,
 
     awardsCard: 'COMMUTATIVE DIAGRAM',
 
-    leanStub: `import Mathlib.CategoryTheory.Category.Basic
-import Mathlib.CategoryTheory.CommSq
-
-variable {C : Type*} [Category C] {A B D E : C}
-variable (f : A ⟶ B) (g : A ⟶ D) (h : B ⟶ E) (k : D ⟶ E)
-
--- The square commutes: h ∘ f = k ∘ g
-example (sq : CommSq f g h k) : f ≫ h = g ≫ k := sq.w`,
 
     hints: [
       'Open "∘ Commutes", find the pair A → D, and click "mark" to assert that both paths around the square are equal.',

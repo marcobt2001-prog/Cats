@@ -142,3 +142,11 @@ export function exportSVG(svgRef) {
   const a = document.createElement('a'); a.href = url; a.download = 'diagram.svg'; a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Saves the generated Lean file, so it can be opened in an editor or shared. */
+export function exportLean(source, filename = 'diagram.lean') {
+  const blob = new Blob([source], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}

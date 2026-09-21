@@ -6,7 +6,8 @@
  * itself is computed locally by `summarize`, so the one definition of "ok"
  * lives in the pure layer rather than on the wire.
  */
-import { summarize } from './diagnostics.js';
+// Explicit extension: Vite will not resolve a .js specifier to a .ts file from JS.
+import { summarize } from './diagnostics.ts';
 
 const HEADERS = { 'Content-Type': 'application/json', 'X-CATS-Lean': '1' };
 export const UNAVAILABLE_REASON = 'Lean runs only in local development';

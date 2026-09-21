@@ -83,22 +83,57 @@ export default function ProofLog({ given = [], inventory = [], steps = [] }) {
         {steps.length === 0
           ? <div style={emptyText}>Draw morphisms to add proof steps.</div>
           : steps.map((step, i) => (
-            <div key={i} style={{
-              ...itemStyle,
-              color: statusColor[step.status] || statusColor.pending,
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: 6,
-              marginBottom: 4,
-            }}>
-              <span style={{ flexShrink: 0, fontSize: 11, marginTop: 2 }}>
-                {statusIcon[step.status] || statusIcon.pending}
-              </span>
-              <span>{step.description}</span>
+            <div key={i} style={{ marginBottom: 4 }}>
+              <div style={{
+                ...itemStyle,
+                color: statusColor[step.status] || statusColor.pending,
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 6,
+              }}>
+                <span style={{ flexShrink: 0, fontSize: 11, marginTop: 2 }}>
+                  {statusIcon[step.status] || statusIcon.pending}
+                </span>
+                <span style={{ flex: 1 }}>{step.description}</span>
+                {step.lean && <LeanBadge view={step.lean} />}
+              </div>
+              {step.lean?.kind === 'failed' && (
+                <div style={{
+                  color: '#ef4444', fontSize: 10, paddingLeft: 20,
+                  fontFamily: "'JetBrains Mono', monospace",
+                }}>
+                  {step.lean.message}
+                </div>
+              )}
             </div>
           ))
         }
       </div>
     </div>
+  );
+}
+
+/**
+ * Lean's verdict, kept visually distinct from CATS' own tick: `satisfied` is
+ * teal and means "CATS believes you"; `verified` is gold and means Lean checked
+ * it. Conflating them would undo the point of the distinction.
+ */
+function LeanBadge({ view }) {
+  const styles = {
+    verified: { text: '⊢', color: '#f5c542', title: 'verified by Lean' },
+    failed: { text: '✗', color: '#ef4444', title: 'Lean rejected this' },
+    stale: { text: '⊢', color: '#8a7a3a', title: 'the diagram changed since Lean saw it; run again' },
+    believed: { text: '', color: 'transparent', title: '' },
+    open: { text: '', color: 'transparent', title: '' },
+  };
+  const s = styles[view.kind] ?? styles.open;
+  if (!s.text) return null;
+  return (
+    <span title={s.title} style={{
+      color: s.color, fontSize: 11, flexShrink: 0,
+      opacity: view.kind === 'stale' ? 0.7 : 1,
+    }}>
+      {s.text}
+    </span>
   );
 }

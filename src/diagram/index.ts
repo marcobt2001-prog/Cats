@@ -13,7 +13,7 @@ export {
 
 export {
   parallelPairs, hypothesesAt, isCommuting, markCommuting, unmarkCommuting, toggleCommuting,
-  commutingEdgeIds, describePairs,
+  commutingEdgeIds, describePairs, addPairGoals,
 } from './commute.js';
 export type { ParallelPair, PairDescription } from './commute.js';
 

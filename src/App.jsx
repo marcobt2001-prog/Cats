@@ -5,17 +5,20 @@ import { useDiagramHistory } from './useDiagramHistory.js';
 import {
   fromLegacyDiagram, addObject, addMorphism, renameObject, renameMorphism, setMorphismStyle,
   moveNodes as moveNodesOp, setCurve as setCurveOp, deleteElements as deleteElementsOp,
-  describePairs, toggleCommuting, commutingEdgeIds,
+  describePairs, toggleCommuting, commutingEdgeIds, addPairGoals,
   extractSubdiagram, mergeDiagram,
 } from './diagram/index.ts';
-import { objectsOf, morphismsOf, labelStatus, printLatex } from './math/index.ts';
+import { objectsOf, morphismsOf, labelStatus, printLatex, printProposition, removeGoals } from './math/index.ts';
+import { generateLean, applyLeanResult, leanViewOf } from './lean/index.ts';
+import LeanPanel from './lean/LeanPanel.jsx';
+import { useLeanCheck } from './lean/useLeanCheck.js';
 import { DEFAULT_NODES, DEFAULT_EDGES } from './defaults.js';
 import ObjectPanel from './ObjectPanel.jsx';
 import MorphismPanel from './MorphismPanel.jsx';
 import CommChecker from './CommChecker.jsx';
 import AlignToolbar from './AlignToolbar.jsx';
 import { CONSTRUCTIONS } from './constructions.js';
-import { exportTikzCD, exportSVG, saveDiagramFile, loadDiagramFile } from './export.js';
+import { exportTikzCD, exportSVG, exportLean, saveDiagramFile, loadDiagramFile } from './export.js';
 import { st } from './styles.js';
 import CollapsiblePanel from './panels/CollapsiblePanel.jsx';
 import GameMode from './game/GameMode.jsx';
@@ -99,6 +102,7 @@ function Editor() {
   const [snapOn, setSnapOn]     = useState(false);
   const [showGrid, setShowGrid] = useState(true);
   const [showComm, setShowComm] = useState(false);
+  const [showLean, setShowLean] = useState(false);
   const [clipboard, setClipboard] = useState(null);
   const [toast, setToast]       = useState('');
   const [showConstructions, setShowConstructions] = useState(false);
@@ -141,6 +145,23 @@ function Editor() {
     apply(next);
     selectOne('edge', id);
   };
+
+  // ── Lean ──
+  // Marking a pair asserts an equation; proving it asks Lean to decide one.
+  const lean = useLeanCheck();
+  const provePair = (src, tgt) => { apply(s => addPairGoals(s, src, tgt)); setShowLean(true); };
+
+  const leanGen = useMemo(() => generateLean(state.doc), [state]);
+  const leanGoals = useMemo(
+    () => state.doc.goals.map(g => ({ id: g.id, text: printProposition(state.doc.context, g.prop, 'classical') })),
+    [state],
+  );
+
+  const runLean = useCallback(async () => {
+    const gen = generateLean(getState().doc);
+    const result = await lean.run(gen.source);
+    if (result) apply(s => ({ ...s, doc: applyLeanResult(s.doc, gen, result) }));
+  }, [apply, getState, lean]);
 
   const deleteNode = id => { deleteElements({ nodeIds: [id] }); if (selNodeIds.has(id)) clear(); };
   const deleteEdge = id => { deleteElements({ edgeIds: [id] }); if (selEdgeIds.has(id)) clear(); };
@@ -267,6 +288,7 @@ function Editor() {
           <TogBtn active={snapOn}   onClick={() => setSnapOn(p=>!p)}   label="⊞ Snap" />
           <TogBtn active={showGrid} onClick={() => setShowGrid(p=>!p)} label="⋮ Grid" />
           <TogBtn active={showComm} onClick={() => setShowComm(p=>!p)} label="∘ Commutes" color="#6ee7b7" />
+          <TogBtn active={showLean} onClick={() => setShowLean(p=>!p)} label="⊢ Lean" color="#f5c542" />
           <div style={{ width: 1, height: 16, background: '#1a2540', margin: '0 2px' }} />
           <div style={{ position: 'relative' }}>
             <button onClick={() => setShowConstructions(p => !p)}
@@ -330,8 +352,23 @@ function Editor() {
         )}
 
         {showComm && <CommChecker
-          pairs={pairs} onToggle={togglePair} onCompose={composePath}
+          pairs={pairs} onToggle={togglePair} onCompose={composePath} onProve={provePair}
           onClose={() => setShowComm(false)} />}
+
+        {showLean && <LeanPanel
+          source={leanGen.source}
+          goals={leanGoals}
+          viewOf={id => leanViewOf(state.doc, id)}
+          availability={lean.availability}
+          running={lean.running}
+          elapsedMs={lean.elapsedMs}
+          result={lean.result}
+          error={lean.error}
+          onRun={runLean}
+          onRemoveGoal={id => apply(s => ({ ...s, doc: removeGoals(s.doc, [id]) }))}
+          onCopy={() => { navigator.clipboard?.writeText(leanGen.source); showToast('Lean source copied'); }}
+          onDownload={() => exportLean(leanGen.source)}
+          onClose={() => setShowLean(false)} />}
 
         {toast && (
           <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)',

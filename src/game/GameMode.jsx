@@ -7,13 +7,19 @@ import {
   deleteElements as deleteElementsOp,
   describePairs, toggleCommuting, commutingEdgeIds,
 } from '../diagram/index.ts';
-import { labelStatus, printLatex } from '../math/index.ts';
+import { labelStatus, printLatex, printProposition } from '../math/index.ts';
 import LabelStatus from '../LabelStatus.jsx';
+import { generateLean, applyLeanResult, leanViewOf } from '../lean/index.ts';
+import LeanPanel from '../lean/LeanPanel.jsx';
+import LeanCode from '../lean/LeanCode.jsx';
+import { useLeanCheck } from '../lean/useLeanCheck.js';
+import { exportLean } from '../export.js';
 import { st } from '../styles.js';
 import CollapsiblePanel from '../panels/CollapsiblePanel.jsx';
 import ProofLog from './ProofLog.jsx';
 import { useLevelDiagram } from './LevelLoader.jsx';
 import { validateGoals } from './ValidationEngine.js';
+import { upsertLevelGoals, leanGoalId } from './leanGoals.js';
 import { markLevelComplete } from './completion.js';
 
 export default function GameMode({ levelId, onBackToSelect }) {
@@ -43,6 +49,7 @@ function GameCanvas({ lv, onBackToSelect }) {
   const [drawSrc, setDrawSrc] = useState(null);
   const [showHint, setShowHint] = useState(false);
   const [showComm, setShowComm] = useState(false);
+  const [showLean, setShowLean] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
 
   const svgRef = useRef();
@@ -52,10 +59,45 @@ function GameCanvas({ lv, onBackToSelect }) {
   const commEdgeIds = useMemo(() => commutingEdgeIds(state), [state]);
   const pairs = useMemo(() => describePairs(state), [state]);
 
+  // What Lean would be asked, given the diagram as it stands now.
+  const lean = useLeanCheck();
+  const preview = useMemo(() => {
+    const withGoals = upsertLevelGoals(state, level);
+    return { doc: withGoals.doc, gen: generateLean(withGoals.doc) };
+  }, [state, level]);
+
+  const leanGoals = useMemo(
+    () => preview.doc.goals.map(g => ({
+      id: g.id,
+      text: printProposition(preview.doc.context, g.prop, 'classical'),
+    })),
+    [preview],
+  );
+
+  const runLean = useCallback(async () => {
+    setShowLean(true);
+    // State the goals first, so the verdict has something to attach to.
+    apply(s => upsertLevelGoals(s, level));
+    const gen = generateLean(getState().doc);
+    const result = await lean.run(gen.source);
+    if (result) apply(s => ({ ...s, doc: applyLeanResult(s.doc, gen, result) }));
+  }, [apply, getState, lean, level]);
+
   // Validation
-  const { updatedSteps, levelComplete } = useMemo(
+  const { updatedGoals, updatedSteps, levelComplete } = useMemo(
     () => validateGoals(level.goals, state),
     [level.goals, state],
+  );
+
+  // CATS' verdict and Lean's, side by side, one row per level goal.
+  const steps = useMemo(
+    () => updatedSteps.map((step, i) => {
+      const levelGoal = updatedGoals[i];
+      const id = levelGoal ? leanGoalId(level.id, levelGoal.id) : undefined;
+      const view = id && state.doc.goals.some(g => g.id === id) ? leanViewOf(state.doc, id) : undefined;
+      return view ? { ...step, lean: view } : step;
+    }),
+    [updatedSteps, updatedGoals, level.id, state],
   );
 
   // Show completion overlay once and persist
@@ -194,6 +236,12 @@ function GameCanvas({ lv, onBackToSelect }) {
               color: showComm ? '#6ee7b7' : '#3d5a8a', borderColor: showComm ? '#6ee7b7' : undefined }}>
             ∘ Commutes
           </button>
+          <button onClick={() => setShowLean(p => !p)}
+            title="Generate Lean and check it"
+            style={{ ...(showLean ? st.btnActive : st.btn),
+              color: showLean ? '#f5c542' : '#3d5a8a', borderColor: showLean ? '#f5c542' : undefined }}>
+            ⊢ Lean
+          </button>
 
           {/* Label editor for the selected player-drawn arrow. Inline on purpose:
               an inner component would be a new type each render and lose focus. */}
@@ -230,6 +278,20 @@ function GameCanvas({ lv, onBackToSelect }) {
           pairs={pairs} onToggle={togglePair} onCompose={composePath}
           onClose={() => setShowComm(false)} />}
 
+        {showLean && <LeanPanel
+          source={preview.gen.source}
+          goals={leanGoals}
+          viewOf={id => leanViewOf(state.doc, id)}
+          availability={lean.availability}
+          running={lean.running}
+          elapsedMs={lean.elapsedMs}
+          result={lean.result}
+          error={lean.error}
+          onRun={runLean}
+          onCopy={() => navigator.clipboard?.writeText(preview.gen.source)}
+          onDownload={() => exportLean(preview.gen.source, `${level.id}.lean`)}
+          onClose={() => setShowLean(false)} />}
+
         {/* Hint bar */}
         {showHint && level.hints && level.hints.length > 0 && (
           <div style={{
@@ -243,22 +305,28 @@ function GameCanvas({ lv, onBackToSelect }) {
         )}
 
         {/* Completion overlay */}
-        {showComplete && <CompletionOverlay level={level} onClose={() => setShowComplete(false)} onBackToSelect={onBackToSelect} />}
+        {showComplete && <CompletionOverlay
+          level={level}
+          leanSource={preview.gen.source}
+          availability={lean.availability}
+          onVerify={() => { setShowComplete(false); runLean(); }}
+          onClose={() => setShowComplete(false)}
+          onBackToSelect={onBackToSelect} />}
       </div>
 
       <CollapsiblePanel side="right" label="Proof Log" defaultOpen={false}>
         <ProofLog
           given={level.proofLog.given}
           inventory={level.proofLog.inventory}
-          steps={updatedSteps}
+          steps={steps}
         />
       </CollapsiblePanel>
     </div>
   );
 }
 
-function CompletionOverlay({ level, onClose, onBackToSelect }) {
-  const leanStub = level.leanStub || '';
+function CompletionOverlay({ level, leanSource, availability, onVerify, onClose, onBackToSelect }) {
+  const leanAvailable = availability?.available === true;
 
   return (
     <div style={{
@@ -292,10 +360,10 @@ function CompletionOverlay({ level, onClose, onBackToSelect }) {
           marginBottom: 20,
           opacity: 0.8,
         }}>
-          Proof complete.
+          Proof complete by CATS' own reasoning. Only Lean can call it verified.
         </div>
 
-        {leanStub && (
+        {leanSource && (
           <div style={{
             background: '#070c18',
             border: '1px solid #1a2540',
@@ -303,6 +371,7 @@ function CompletionOverlay({ level, onClose, onBackToSelect }) {
             padding: '16px 18px',
             marginBottom: 20,
             overflowX: 'auto',
+            maxHeight: 260,
           }}>
             <div style={{
               color: '#3d5a8a', fontSize: 9,
@@ -311,13 +380,28 @@ function CompletionOverlay({ level, onClose, onBackToSelect }) {
               textTransform: 'uppercase',
               marginBottom: 10,
             }}>
-              Lean 4 / Mathlib
+              Lean 4 / Mathlib · generated from your diagram
             </div>
-            <LeanCode code={leanStub} />
+            <LeanCode code={leanSource} />
           </div>
         )}
 
         <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            onClick={onVerify}
+            disabled={!leanAvailable}
+            title={leanAvailable ? 'Check this with Lean' : availability?.reason}
+            style={{
+              ...st.btn,
+              color: leanAvailable ? '#f5c542' : '#3d5a8a',
+              borderColor: leanAvailable ? '#5a4a1a' : '#1e3256',
+              padding: '8px 18px',
+              fontSize: 12,
+              cursor: leanAvailable ? 'pointer' : 'default',
+              opacity: leanAvailable ? 1 : 0.6,
+            }}>
+            ⊢ Verify with Lean
+          </button>
           <button onClick={onBackToSelect} style={{
             ...st.btn,
             color: '#6ee7b7',
@@ -339,55 +423,4 @@ function CompletionOverlay({ level, onClose, onBackToSelect }) {
       </div>
     </div>
   );
-}
-
-const LEAN_KEYWORDS = new Set([
-  'import', 'variable', 'def', 'example', 'theorem', 'lemma',
-  'where', 'let', 'in', 'by', 'exact', 'rfl', 'sorry',
-  'open', 'namespace', 'end', 'section', 'noncomputable',
-]);
-
-function LeanCode({ code }) {
-  const lines = code.split('\n');
-  return (
-    <pre style={{
-      margin: 0,
-      fontFamily: "'JetBrains Mono', monospace",
-      fontSize: 12,
-      lineHeight: 1.7,
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    }}>
-      {lines.map((line, i) => (
-        <div key={i}>{highlightLean(line)}</div>
-      ))}
-    </pre>
-  );
-}
-
-function highlightLean(line) {
-  // Comments
-  if (line.trimStart().startsWith('--')) {
-    return <span style={{ color: '#3d5a8a' }}>{line}</span>;
-  }
-
-  // Tokenize and highlight
-  const parts = [];
-  const regex = /(\b\w+\b|[^\w\s]+|\s+)/g;
-  let m;
-  let idx = 0;
-  while ((m = regex.exec(line)) !== null) {
-    const token = m[0];
-    if (LEAN_KEYWORDS.has(token)) {
-      parts.push(<span key={idx} style={{ color: '#4db8ff' }}>{token}</span>);
-    } else if (/^[A-Z]/.test(token) && /^\w+$/.test(token)) {
-      parts.push(<span key={idx} style={{ color: '#c8d3ea' }}>{token}</span>);
-    } else if (/^:=?$/.test(token) || /^[{}()\[\]⟶∘]$/.test(token)) {
-      parts.push(<span key={idx} style={{ color: '#7b92b0' }}>{token}</span>);
-    } else {
-      parts.push(<span key={idx} style={{ color: '#8899b0' }}>{token}</span>);
-    }
-    idx++;
-  }
-  return parts;
 }

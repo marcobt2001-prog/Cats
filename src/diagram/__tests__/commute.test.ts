@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { parallelPairs, isCommuting, markCommuting, unmarkCommuting, toggleCommuting, commutingEdgeIds } from '../commute.js';
+import {
+  parallelPairs, isCommuting, markCommuting, unmarkCommuting, toggleCommuting, commutingEdgeIds, addPairGoals,
+} from '../commute.js';
 import { addMorphism, deleteElements } from '../state.js';
-import { declareHypothesis, hypothesesOf } from '../../math/context.js';
+import { declareHypothesis, hypothesesOf, validateDocument } from '../../math/context.js';
 import { morphism, compose } from '../../math/expr.js';
 import { printProposition } from '../../math/print.js';
 import { defaults, square } from './fixtures.js';
@@ -80,5 +82,37 @@ describe('more than two paths', () => {
     s = { ...s, doc };
     expect(isCommuting(s, 'A', 'D')).toBe(true);
     expect(markCommuting(s, 'A', 'D')).toBe(s);
+  });
+});
+
+describe('addPairGoals', () => {
+  it('states one goal per extra path', () => {
+    const s = addPairGoals(square(), 'A', 'D');
+    expect(s.doc.goals).toHaveLength(1);
+    expect(printProposition(s.doc.context, s.doc.goals[0]!.prop, 'classical')).toBe('h ∘ f = k ∘ g');
+    expect(s.doc.goals[0]!.status).toEqual({ kind: 'open' });
+    expect(validateDocument(s.doc)).toEqual([]);
+  });
+
+  it('states two goals when three paths meet', () => {
+    let s = square();
+    [s] = addMorphism(s, { src: 'A', tgt: 'D', name: 'd' });
+    expect(addPairGoals(s, 'A', 'D').doc.goals).toHaveLength(2);
+  });
+
+  it('is idempotent, in either orientation', () => {
+    const once = addPairGoals(square(), 'A', 'D');
+    expect(addPairGoals(once, 'A', 'D')).toBe(once);
+  });
+
+  it('still states a goal for a pair that already commutes by definition', () => {
+    // Worth asking Lean even when CATS is sure: that is the point of the phase.
+    const s = addPairGoals(defaults(), 'A', 'C');
+    expect(s.doc.goals).toHaveLength(1);
+  });
+
+  it('does nothing for a pair with fewer than two paths', () => {
+    const s = square();
+    expect(addPairGoals(s, 'A', 'B')).toBe(s);
   });
 });
