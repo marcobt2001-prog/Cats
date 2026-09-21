@@ -8,8 +8,8 @@ import {
   describePairs, toggleCommuting, commutingEdgeIds, addPairGoals,
   extractSubdiagram, mergeDiagram,
 } from './diagram/index.ts';
-import { objectsOf, morphismsOf, labelStatus, printLatex, printProposition, removeGoals } from './math/index.ts';
-import { generateLean, applyLeanResult, leanViewOf } from './lean/index.ts';
+import { objectsOf, morphismsOf, labelStatus, printLatex, removeGoals } from './math/index.ts';
+import { generateLean, applyLeanResult, leanViewOf, leanProp } from './lean/index.ts';
 import LeanPanel from './lean/LeanPanel.jsx';
 import { useLeanCheck } from './lean/useLeanCheck.js';
 import { DEFAULT_NODES, DEFAULT_EDGES } from './defaults.js';
@@ -153,8 +153,9 @@ function Editor() {
 
   const leanGen = useMemo(() => generateLean(state.doc), [state]);
   const leanGoals = useMemo(
-    () => state.doc.goals.map(g => ({ id: g.id, text: printProposition(state.doc.context, g.prop, 'classical') })),
-    [state],
+    // Lean syntax, matching the file shown just below it in the panel.
+    () => state.doc.goals.map(g => ({ id: g.id, text: leanProp(leanGen.names, g.prop) })),
+    [state, leanGen],
   );
 
   const runLean = useCallback(async () => {

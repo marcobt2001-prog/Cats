@@ -7,9 +7,9 @@ import {
   deleteElements as deleteElementsOp,
   describePairs, toggleCommuting, commutingEdgeIds,
 } from '../diagram/index.ts';
-import { labelStatus, printLatex, printProposition } from '../math/index.ts';
+import { labelStatus, printLatex } from '../math/index.ts';
 import LabelStatus from '../LabelStatus.jsx';
-import { generateLean, applyLeanResult, leanViewOf } from '../lean/index.ts';
+import { generateLean, applyLeanResult, leanViewOf, leanProp } from '../lean/index.ts';
 import LeanPanel from '../lean/LeanPanel.jsx';
 import LeanCode from '../lean/LeanCode.jsx';
 import { useLeanCheck } from '../lean/useLeanCheck.js';
@@ -69,7 +69,8 @@ function GameCanvas({ lv, onBackToSelect }) {
   const leanGoals = useMemo(
     () => preview.doc.goals.map(g => ({
       id: g.id,
-      text: printProposition(preview.doc.context, g.prop, 'classical'),
+      // Lean syntax, matching the file shown just below it in the panel.
+      text: leanProp(preview.gen.names, g.prop),
     })),
     [preview],
   );

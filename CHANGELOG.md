@@ -4,6 +4,38 @@ All notable changes to this project will be documented in this file.
 
 <!-- New entries go here, newest first -->
 
+## 2026-09-21 — v0.9: The Lean loop (Phase 4)
+
+### Lean verification
+- CATS generates a Lean 4 / Mathlib file from the diagram, checks it with a local `lake env lean`, and writes the verdict back into the document. Only this path produces `verified`; CATS' own reasoning still stops at `believed`
+- New pure layer `src/lean/` (TypeScript, tested): Lean identifiers from LaTeX labels, the generator and its line map, the diagnostics parser, and the single sanctioned constructor of `verified`
+- New `server/lean/`, deliberately outside `src/` so no process API can reach the browser bundle: the runner (spawn, queue, timeout, status probe, source guard), the dev-server endpoint, and `npm run lean:setup`
+- A shared Lean panel in both modes shows the file, the goals and their status, Lean's diagnostics against the line that caused them, and the raw output. Copy and download work even when Lean is unavailable
+- The editor's Commutes panel gains "prove" beside "mark": marking asserts an equation, proving asks Lean to decide one
+- The game promotes level goals into real propositions under stable ids, so a verdict survives a re-check. The proof log shows CATS' teal tick and Lean's gold turnstile separately
+
+### Generated Lean
+- Objects become implicit variables, atomic morphisms explicit ones, and a defined morphism a `local notation`, so a composite arrow *is* its composite and `rfl` closes it. Notations are emitted in dependency order, since definitions may forward-reference
+- The category variable is `𝒞`, so an object may still be called `C`. The four hand-written `leanStub` strings are deleted; three of them would not have compiled, and two renamed objects to dodge exactly that collision
+- One tactic per goal, so one run decides it: `first | rfl | (simp_all only [...]; done) | aesop_cat`. No hypothesis list, so there is no rewrite direction to guess
+- Each goal carries a comment with CATS' own verdict above the `example` that Lean will decide
+
+### Behaviour changes
+- Deleting a hypothesis or goal now also removes the steps that referenced it, and reopens any goal whose closing step went with it. Previously such a document failed to load again
+- A check records the exact source it ran, so renaming a morphism or withdrawing a hypothesis marks the earlier verdict stale rather than leaving it looking current
+
+### Toolchain
+- `lean/` holds a lake project pinned to Mathlib v4.34.0 (stable, not master). `npm run lean:setup` installs it; `CATS_LEAN_DIR` keeps the multi-GB build out of OneDrive
+- Lean runs locally only. A deployed build has no endpoint and the panel says so
+
+### Verification
+- `npm run check`: 28 test files, 311 tests, including six that drive a real Lean
+- Browser end to end: prove a pair, run Lean, "verified 1 of 1 in 14.9 s"
+
+### Files
+- New: `src/lean/**`, `server/lean/**`, `lean/**`, `src/game/leanGoals.js`, `docs/PHASE4-PLAN.md`
+- Changed: `src/math/{types,context,proof,index}.ts`, `src/diagram/{commute,index}.ts`, `App.jsx`, `CommChecker.jsx`, `GameMode.jsx`, `ProofLog.jsx`, `world1-sets.js`, `export.js`, `vite.config.js`, `tsconfig.json`
+
 ## 2026-09-04 — v0.8: Semantic diagram interpretation (Phase 3)
 
 ### Labels mean something
