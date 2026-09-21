@@ -7,3 +7,12 @@
 
 export { CATEGORY_VAR, isLeanIdent, leanIdent, assignLeanNames } from './names.js';
 export type { LeanNames } from './names.js';
+
+export { generateLean, leanExpr, leanProp, definitionOrder } from './generate.js';
+export type { GeneratedLean, GenerateOptions, LeanGoalBlock } from './generate.js';
+
+export { parseLeanOutput, isSorryWarning, summarize, reportByGoal } from './diagnostics.js';
+export type { LeanDiagnostic, LeanRaw, LeanResult, GoalReport } from './diagnostics.js';
+
+export { applyLeanResult, leanCheckOf, isStale, leanViewOf, STEP_LEAN_CHECK } from './apply.js';
+export type { LeanGoalView } from './apply.js';
