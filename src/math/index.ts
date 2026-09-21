@@ -22,7 +22,7 @@ export type { TypeResult } from './expr.js';
 export {
   emptyDocument, freshId, usedIds,
   declareObject, declareMorphism, declareHypothesis,
-  removeDeclarations, renameDeclaration, setMorphismProperties,
+  removeDeclarations, pruneDanglingSteps, renameDeclaration, setMorphismProperties,
   getObject, getMorphism, getHypothesis, objectsOf, morphismsOf, hypothesesOf,
   propositionError, validateContext, validateDocument,
 } from './context.js';
@@ -43,7 +43,7 @@ export { entailment, entails } from './entail.js';
 export type { Entailment } from './entail.js';
 
 export {
-  getGoal, addGoal, addStep, setGoalStatus,
+  getGoal, addGoal, addStep, setGoalStatus, upsertGoal, removeGoals,
   tryCloseByNormalization, tryCloseByEntailment, STEP_REFL_NORMALIZE, STEP_ENTAIL,
 } from './proof.js';
 

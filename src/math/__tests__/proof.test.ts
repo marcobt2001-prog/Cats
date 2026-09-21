@@ -1,8 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { GoalStatus } from '../types.js';
-import { emptyDocument, declareObject, declareMorphism, validateDocument, MathError } from '../context.js';
+import { emptyDocument, declareObject, declareMorphism, declareHypothesis, removeDeclarations, validateDocument, MathError } from '../context.js';
 import { morphism, identity, compose } from '../expr.js';
-import { addGoal, addStep, setGoalStatus, tryCloseByNormalization, getGoal, STEP_REFL_NORMALIZE } from '../proof.js';
+import {
+  addGoal, addStep, setGoalStatus, upsertGoal, removeGoals,
+  tryCloseByNormalization, tryCloseByEntailment, getGoal, STEP_REFL_NORMALIZE,
+} from '../proof.js';
+import { serializeDocument, deserializeDocument } from '../serialize.js';
 
 function square() {
   let doc = emptyDocument();
@@ -80,5 +84,70 @@ describe('verified status is Lean-only by construction', () => {
     // @ts-expect-error 'cats' is not an allowed authority for 'verified'
     const bad: GoalStatus = { kind: 'verified', authority: 'cats' };
     expect(bad).toBeTruthy();
+  });
+});
+
+describe('upsertGoal', () => {
+  it('adds a goal under a caller-supplied id', () => {
+    const doc = upsertGoal(square(), 'goal:L:g1', { kind: 'eq', left: compose(f, h), right: compose(g, k) });
+    expect(getGoal(doc, 'goal:L:g1')?.status).toEqual({ kind: 'open' });
+    expect(validateDocument(doc)).toEqual([]);
+  });
+
+  it('leaves an equivalent statement alone, in either orientation', () => {
+    let doc = upsertGoal(square(), 'q1', { kind: 'eq', left: compose(f, identity('B'), h), right: compose(g, k) });
+    doc = setGoalStatus(doc, 'q1', { kind: 'failed', authority: 'cats', message: 'x' });
+    // Same statement up to the unit law, and the same statement reversed.
+    expect(upsertGoal(doc, 'q1', { kind: 'eq', left: compose(f, h), right: compose(g, k) })).toBe(doc);
+    expect(upsertGoal(doc, 'q1', { kind: 'eq', left: compose(g, k), right: compose(f, h) })).toBe(doc);
+  });
+
+  it('replaces a changed statement as open and drops the steps that closed it', () => {
+    let doc = square();
+    doc = upsertGoal(doc, 'q1', { kind: 'eq', left: compose(f, identity('B'), h), right: compose(f, h) });
+    doc = tryCloseByNormalization(doc, 'q1').doc;
+    expect(getGoal(doc, 'q1')?.status.kind).toBe('believed');
+    const next = upsertGoal(doc, 'q1', { kind: 'eq', left: compose(f, h), right: compose(g, k) });
+    expect(getGoal(next, 'q1')?.status).toEqual({ kind: 'open' });
+    expect(next.steps).toEqual([]);
+    expect(validateDocument(next)).toEqual([]);
+  });
+
+  it('rejects an ill-typed replacement', () => {
+    const doc = upsertGoal(square(), 'q1', { kind: 'eq', left: f, right: f });
+    expect(() => upsertGoal(doc, 'q1', { kind: 'eq', left: f, right: g })).toThrow(MathError);
+  });
+});
+
+describe('removeGoals and pruneDanglingSteps', () => {
+  it('removes goals with the steps that referenced them', () => {
+    let doc = square();
+    doc = upsertGoal(doc, 'q1', { kind: 'eq', left: compose(f, identity('B'), h), right: compose(f, h) });
+    doc = tryCloseByNormalization(doc, 'q1').doc;
+    const next = removeGoals(doc, ['q1']);
+    expect(next.goals).toEqual([]);
+    expect(next.steps).toEqual([]);
+    expect(validateDocument(next)).toEqual([]);
+  });
+
+  it('is a no-op for unknown ids', () => {
+    const doc = square();
+    expect(removeGoals(doc, ['nope'])).toBe(doc);
+  });
+
+  it('reopens a goal whose closing step is pruned', () => {
+    let doc = square();
+    let hid: string;
+    [doc, hid] = declareHypothesis(doc, { prop: { kind: 'eq', left: compose(f, h), right: compose(g, k) } });
+    let gid: string;
+    [doc, gid] = addGoal(doc, { kind: 'eq', left: compose(f, h), right: compose(g, k) });
+    doc = tryCloseByEntailment(doc, gid).doc;
+    expect(doc.steps[0]!.inputs).toEqual([gid, hid]);
+    // Deleting the hypothesis invalidates the reasoning, so the goal is open again.
+    const next = removeDeclarations(doc, [hid]);
+    expect(next.steps).toEqual([]);
+    expect(getGoal(next, gid)?.status).toEqual({ kind: 'open' });
+    expect(validateDocument(next)).toEqual([]);
+    expect(deserializeDocument(serializeDocument(next))).toEqual(next);
   });
 });

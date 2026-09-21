@@ -10,8 +10,8 @@ export { MathError };
 // ── Editing existing declarations ──────────────────────────────────────────
 /**
  * Removes the given declarations and everything that depends on them:
- * morphisms of removed objects, hypotheses and goals mentioning removed ids.
- * Steps referencing removed goals are left for `validateDocument` to flag.
+ * morphisms of removed objects, hypotheses and goals mentioning removed ids,
+ * and the steps that referenced any of those (see `pruneDanglingSteps`).
  */
 export function removeDeclarations(doc: MathDocument, ids: Iterable<string>): MathDocument {
   const gone = new Set(ids);
@@ -35,7 +35,26 @@ export function removeDeclarations(doc: MathDocument, ids: Iterable<string>): Ma
     return true;
   });
   const goals = doc.goals.filter(g => !gone.has(g.id) && !mentions(g.prop.left, gone) && !mentions(g.prop.right, gone));
-  return { ...doc, context: { declarations }, goals };
+  return pruneDanglingSteps({ ...doc, context: { declarations }, goals });
+}
+
+/**
+ * Drops every step that references an id no longer in the document (a removed
+ * goal or hypothesis), and reopens any goal whose status pointed at a dropped
+ * step: the reasoning that closed it is gone, so it is open again.
+ */
+export function pruneDanglingSteps(doc: MathDocument): MathDocument {
+  const known = new Set<string>();
+  for (const d of doc.context.declarations) known.add(d.id);
+  for (const g of doc.goals) known.add(g.id);
+  const steps = doc.steps.filter(s => [...s.inputs, ...s.outputs].every(ref => known.has(ref)));
+  if (steps.length === doc.steps.length) return doc;
+  const stepIds = new Set(steps.map(s => s.id));
+  const goals = doc.goals.map(g => {
+    const by = 'by' in g.status ? g.status.by : undefined;
+    return by !== undefined && !stepIds.has(by) ? { ...g, status: { kind: 'open' as const } } : g;
+  });
+  return { ...doc, goals, steps };
 }
 
 export function renameDeclaration(doc: MathDocument, id: string, name: string): MathDocument {
@@ -253,8 +272,9 @@ export function validateDocument(doc: MathDocument): string[] {
   }
   for (const g of doc.goals) {
     const st = g.status;
-    if (st.kind === 'believed' && !doc.steps.some(s => s.id === st.by)) {
-      errors.push(`goal '${g.id}': believed by unknown step '${st.by}'`);
+    const by = 'by' in st ? st.by : undefined;
+    if (by !== undefined && !doc.steps.some(s => s.id === by)) {
+      errors.push(`goal '${g.id}': ${st.kind} by unknown step '${by}'`);
     }
   }
   return errors;

@@ -4,7 +4,9 @@ import {
   moveNodes, setCurve, deleteElements, checkInvariants,
 } from '../state.js';
 import { ARROW_STYLES } from '../types.js';
-import { getMorphism, objectsOf, morphismsOf, hypothesesOf } from '../../math/context.js';
+import { getMorphism, objectsOf, morphismsOf, hypothesesOf, validateDocument } from '../../math/context.js';
+import { compose, morphism } from '../../math/expr.js';
+import { addGoal, tryCloseByEntailment } from '../../math/proof.js';
 import { MathError } from '../../math/expr.js';
 import { markCommuting } from '../commute.js';
 import { defaults, square } from './fixtures.js';
@@ -119,5 +121,24 @@ describe('invariants across a sequence of operations', () => {
     s = deleteElements(s, { edgeIds: ['f3'] });
     expect(checkInvariants(s)).toEqual([]);
     expect(hypothesesOf(s.doc.context)).toEqual([]); // f3 was one side of the equation
+  });
+});
+
+describe('goals and steps survive editing', () => {
+  it('a cascade removes the goal and its step, leaving a valid document', () => {
+    let s = square();
+    s = markCommuting(s, 'A', 'D');
+    const hid = hypothesesOf(s.doc.context)[0]!.id;
+    let doc = addGoal(s.doc, { kind: 'eq', left: compose(morphism('f'), morphism('h')), right: compose(morphism('g'), morphism('k')) }, 'q1')[0];
+    doc = tryCloseByEntailment(doc, 'q1').doc;
+    expect(doc.steps[0]!.inputs).toEqual(['q1', hid]);
+    s = { ...s, doc };
+    expect(validateDocument(s.doc)).toEqual([]);
+
+    const next = deleteElements(s, { edgeIds: ['f'] });
+    expect(next.doc.goals).toEqual([]);   // the goal mentions f
+    expect(next.doc.steps).toEqual([]);   // so does the step that closed it
+    expect(validateDocument(next.doc)).toEqual([]);
+    expect(checkInvariants(next)).toEqual([]);
   });
 });

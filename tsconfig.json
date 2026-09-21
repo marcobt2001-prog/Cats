@@ -12,5 +12,5 @@
     "allowJs": true,
     "checkJs": false
   },
-  "include": ["src/math/**/*.ts", "src/diagram/**/*.ts", "src/game/**/*.test.ts"]
+  "include": ["src/math/**/*.ts", "src/diagram/**/*.ts", "src/lean/**/*.ts", "src/game/**/*.test.ts"]
 }

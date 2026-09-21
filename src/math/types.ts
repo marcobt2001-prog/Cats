@@ -85,13 +85,15 @@ export interface MathContext {
 // ── Goals and proof steps ──────────────────────────────────────────────────
 /**
  * `believed` is CATS' own reasoning and is NOT a proof.
- * `verified` requires `authority: 'lean'`; no function in src/math constructs it.
+ * `verified` requires `authority: 'lean'`. Nothing in src/math constructs it;
+ * the only constructor is `applyLeanResult` in src/lean/apply.ts, which writes
+ * back what a real Lean run said. `by` names the step that records the run.
  */
 export type GoalStatus =
   | { kind: 'open' }
   | { kind: 'believed'; by: StepId }
-  | { kind: 'verified'; authority: 'lean'; message?: string }
-  | { kind: 'failed'; authority: 'lean' | 'cats'; message: string };
+  | { kind: 'verified'; authority: 'lean'; message?: string; by?: StepId }
+  | { kind: 'failed'; authority: 'lean' | 'cats'; message: string; by?: StepId };
 
 export interface ProofGoal {
   id: GoalId;

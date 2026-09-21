@@ -1,6 +1,7 @@
 import type { GoalId, GoalStatus, MathDocument, ProofGoal, ProofStep, Proposition, StepId } from './types.js';
-import { MathError, freshId, propositionError, usedIds } from './context.js';
+import { MathError, freshId, propositionError, pruneDanglingSteps, usedIds } from './context.js';
 import { exprEquivalent } from './expr.js';
+import { propEquivalentIn } from './unfold.js';
 import { entailment } from './entail.js';
 
 export const STEP_REFL_NORMALIZE = 'refl-normalize';
@@ -34,6 +35,32 @@ export function addStep(doc: MathDocument, step: Omit<ProofStep, 'id'>, id?: Ste
 export function setGoalStatus(doc: MathDocument, goalId: GoalId, status: GoalStatus): MathDocument {
   if (!getGoal(doc, goalId)) throw new MathError(`unknown goal '${goalId}'`);
   return { ...doc, goals: doc.goals.map(g => (g.id === goalId ? { ...g, status } : g)) };
+}
+
+/**
+ * Keeps a goal with a stable id in sync with a proposition that is recomputed
+ * from outside (a level's goal text, say). An absent goal is added; an
+ * equivalent one (either orientation) is left alone, status and all; a changed
+ * one is replaced as open, and the steps that closed the old statement go.
+ */
+export function upsertGoal(doc: MathDocument, id: GoalId, prop: Proposition): MathDocument {
+  const existing = getGoal(doc, id);
+  if (!existing) return addGoal(doc, prop, id)[0];
+  const flipped: Proposition = { kind: 'eq', left: prop.right, right: prop.left };
+  if (propEquivalentIn(doc.context, existing.prop, prop) || propEquivalentIn(doc.context, existing.prop, flipped)) return doc;
+  const err = propositionError(doc.context, prop);
+  if (err) throw new MathError(`goal: ${err}`);
+  const replaced: ProofGoal = { id, prop, status: { kind: 'open' } };
+  const steps = doc.steps.filter(s => !s.inputs.includes(id) && !s.outputs.includes(id));
+  return pruneDanglingSteps({ ...doc, goals: doc.goals.map(g => (g.id === id ? replaced : g)), steps });
+}
+
+/** Removes goals and every step that referenced them. Unknown ids are ignored. */
+export function removeGoals(doc: MathDocument, ids: Iterable<GoalId>): MathDocument {
+  const gone = new Set(ids);
+  const goals = doc.goals.filter(g => !gone.has(g.id));
+  if (goals.length === doc.goals.length) return doc;
+  return pruneDanglingSteps({ ...doc, goals });
 }
 
 /**
